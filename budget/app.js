@@ -103,9 +103,29 @@
     });
   }
 
+  /**
+   * One-time tidy for books brought in before bills could be due "on payday":
+   * a bill due on the 25th (the old payday) becomes a payday bill, so it
+   * follows the new payday. Marked done in settings, so it runs once.
+   */
+  function upgradePaydayBills() {
+    if (setting("payday_bills") === "done" || S.upgraded) return;
+    S.upgraded = true;
+    var items = activeEnvs()
+      .filter(function (e) {
+        return e.kind === "bill" && Calc.num(e.due_day) === 25 && e.on_payday !== "yes";
+      })
+      .map(function (e) {
+        return { table: "envelopes", row: { id: e.id, on_payday: "yes", due_day: null } };
+      });
+    items.push({ table: "settings", row: { id: "payday_bills", value: "done" } });
+    S.hub.putMany(items);
+  }
+
   /** Bills whose due day has come post themselves, once this device has caught up. */
   function postDueBills() {
     if (!S.syncedOnce || !hasBooks()) return;
+    if (setting("payday_bills") !== "done") return upgradePaydayBills();
     var posts = Calc.duePosts(S.data, today(), function (id) {
       return S.hub.raw("payments", id);
     });
@@ -281,7 +301,7 @@
       });
       if (pays.length) sub = "Paid " + Calc.dayLabel(Calc.dateOf(pays[0])) + (pays.length > 1 ? " and more" : "");
       else if (!o.budget) sub = "Nothing due this month";
-      else if (Calc.num(e.due_day) && mo.funded) sub = "Due " + Calc.dayLabel(Calc.dueDate(M, e.due_day));
+      else if (Calc.billDate(M, e) && mo.funded) sub = (e.on_payday === "yes" ? "Due on payday, " : "Due ") + Calc.dayLabel(Calc.billDate(M, e));
       else sub = "Budget " + money(o.budget);
     } else if (e.kind === "fund") {
       var target = Calc.num(e.target);
@@ -443,7 +463,8 @@
     if (o.received) rows.appendChild(kv("Money in", money(o.received)));
     rows.appendChild(kv("Spent", money(o.spent || 0)));
     if (e.kind === "fund" && Calc.num(e.target)) rows.appendChild(kv("Target", money(e.target) + (e.target_date ? " by " + e.target_date : "")));
-    if (e.kind === "bill" && Calc.num(e.due_day)) rows.appendChild(kv("Due day", String(e.due_day)));
+    if (e.kind === "bill" && e.on_payday === "yes") rows.appendChild(kv("Due", "On payday"));
+    else if (e.kind === "bill" && Calc.num(e.due_day)) rows.appendChild(kv("Due day", String(e.due_day)));
     main.appendChild(section(null, rows));
 
     if (e.kind !== "remaining" && st === "open") {
@@ -1301,6 +1322,7 @@
     var group = select(GROUPS.map(function (g) { return { value: g, label: g }; }), e.group, { id: "e-group" });
     var standard = numberInput(e.standard, { id: "e-standard" });
     var home = select(acctOptions(true, "No account"), e.home_acct, { id: "e-home" });
+    var dueWhen = select([{ value: "payday", label: "On payday" }, { value: "day", label: "On a day of the month" }], e.on_payday === "yes" ? "payday" : "day", { id: "e-when" });
     var due = numberInput(e.due_day, { id: "e-due", inputmode: "numeric", placeholder: "1 to 31" });
     var cap = numberInput(e.daily_cap, { id: "e-cap", placeholder: "Optional" });
     var target = numberInput(e.target, { id: "e-target", placeholder: "Optional" });
@@ -1313,7 +1335,13 @@
     main.appendChild(field("Group", group));
     if (e.kind !== "remaining") main.appendChild(field("Standard month amount", standard));
     main.appendChild(field("Kept in", home, "Payday money for this envelope lands here, and payments come from here unless you choose another account."));
-    var billBits = h("div", null, h("div", { class: "two" }, field("Due day", due), field("Last month", ends)));
+    var dueField = field("Day of the month", due);
+    var billBits = h("div", null, field("Due", dueWhen, "A bill posts itself on this day at its budgeted amount."), h("div", { class: "two" }, dueField, field("Last month", ends)));
+    function showDue() {
+      dueField.style.visibility = dueWhen.value === "day" ? "visible" : "hidden";
+    }
+    dueWhen.addEventListener("change", showDue);
+    showDue();
     var spendBits = h("div", null, field("Daily allowance", cap, "Shows how much is left today on the Month screen."));
     var fundBits = h("div", null, h("div", { class: "two" }, field("Target", target), field("By", targetDate)));
     main.appendChild(billBits);
@@ -1361,14 +1389,16 @@
       var k = kind ? kind.value : e.kind;
       var std = readNumber(standard);
       var d = readNumber(due);
-      if (k === "bill" && d !== null && (isNaN(d) || d < 1 || d > 31)) { msg.textContent = "The due day is a day of the month, 1 to 31."; return; }
+      var onPayday = k === "bill" && dueWhen.value === "payday";
+      if (k === "bill" && !onPayday && d !== null && (isNaN(d) || d < 1 || d > 31)) { msg.textContent = "The due day is a day of the month, 1 to 31."; return; }
       var row = {
         name: nm,
         kind: k,
         group: group.value,
         home_acct: home.value,
         active: active.value,
-        due_day: k === "bill" && d ? Math.round(d) : null,
+        on_payday: onPayday ? "yes" : "",
+        due_day: k === "bill" && !onPayday && d ? Math.round(d) : null,
         daily_cap: k === "spending" ? readNumber(cap) : null,
         target: k === "fund" ? readNumber(target) : null,
         target_date: k === "fund" ? targetDate.value : "",

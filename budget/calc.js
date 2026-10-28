@@ -2,9 +2,10 @@
  * Budget v2: the arithmetic. No screens, no storage, so it can be tested on
  * its own and every screen shows the same numbers.
  *
- * Months run from payday to the day before the next payday. Payday is the
- * 25th, the 24th when the 25th is a Friday, the 26th when it is a Saturday.
- * A month is named after the month it ends in: 25 Oct to 24 Nov is "2026-11".
+ * Months run from payday to the day before the next payday. A month is
+ * named after the month it ends in: 25 Oct to 25 Nov 2026 is "2026-11".
+ * Payday is the day in PAYDAYS below, moved a day earlier when it falls on
+ * a Friday and a day later when it falls on a Saturday.
  *
  * Every amount moves as a line with two sides: an envelope (what the money
  * is for) and an account (where it sits). Envelope balances and account
@@ -33,9 +34,24 @@
     return new Date(p[0], p[1] - 1, p[2], 12, 0, 0);
   }
 
+  /*
+   * The pay day of the month, from the payday in a given calendar month on.
+   * Add a line here when an employer changes; months before it keep the old
+   * day, so history never moves.
+   */
+  var PAYDAYS = [
+    { from: "2000-01", day: 25 },
+    { from: "2026-11", day: 27 }, // new employer: first paid on 26 Nov 2026 (the 27th is a Friday)
+  ];
+
   function paydayOf(y, m) {
-    var w = new Date(y, m - 1, 25, 12).getDay();
-    return w === 5 ? 24 : w === 6 ? 26 : 25;
+    var key = y + "-" + pad(m);
+    var day = 25;
+    PAYDAYS.forEach(function (r) {
+      if (key >= r.from) day = r.day;
+    });
+    var w = new Date(y, m - 1, day, 12).getDay();
+    return w === 5 ? day - 1 : w === 6 ? day + 1 : day;
   }
 
   function paydate(y, m) {
@@ -84,6 +100,12 @@
     var end = noon(paydate(p[0], p[1]));
     end.setDate(end.getDate() - 1);
     return { start: paydate(py, pm), end: ymd(end) };
+  }
+
+  /** When a bill falls due in a month: on payday, or on its day of the month. */
+  function billDate(month, env) {
+    if (env.on_payday === "yes") return range(month).start;
+    return num(env.due_day) ? dueDate(month, env.due_day) : null;
   }
 
   /** The date a bill with this due day falls on inside a month. */
@@ -509,11 +531,11 @@
         if (x.month === month) b[x.env] = num(x.amount);
       });
       ix.envs.forEach(function (e) {
-        if (e.kind !== "bill" || !num(e.due_day)) return;
+        if (e.kind !== "bill") return;
         var amount = num(b[e.id]);
         if (!amount) return;
-        var date = dueDate(month, e.due_day);
-        if (date > today) return;
+        var date = billDate(month, e);
+        if (!date || date > today) return;
         var id = billId(month, e.id);
         if (existing(id)) return;
         var paid = (data.payments || []).some(function (p) {
@@ -577,6 +599,7 @@
     addMonths: addMonths,
     range: range,
     dueDate: dueDate,
+    billDate: billDate,
     monthLabel: monthLabel,
     dayLabel: dayLabel,
     daysBetween: daysBetween,

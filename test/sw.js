@@ -1,5 +1,5 @@
 self.SHELL_APP = "test";
-self.SHELL_VERSION = "2"; // bump this when any file below changes
+self.SHELL_VERSION = "3"; // bump this when any file below changes
 self.SHELL_FILES = [
   "./",
   "./app.js",

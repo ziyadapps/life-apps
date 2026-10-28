@@ -70,13 +70,13 @@ These came across from the old app as they were. Check that they are what you wa
 
 - **The big number** on the Month screen is **Remaining**: money not set aside for anything this month.
 - **The + button** adds a payment: amount, envelope, and optionally a label. It comes from the envelope's own account unless you pick another. **Money in** is for refunds and income.
-- **Bills post themselves** on their due day at the budgeted amount. If the real bill differs, tap the payment and change the amount; the difference settles against Remaining when the month closes. Delete it if a bill did not happen that month, and it will not post again.
+- **Bills post themselves** on their due day at the budgeted amount. A bill is due either **On payday** or on a day of the month (set it in the envelope's settings). If the real bill differs, tap the payment and change the amount; the difference settles against Remaining when the month closes. Delete it if a bill did not happen that month, and it will not post again.
 - **Move money** (on an envelope, or under More) covers changing an envelope's purpose and moving between accounts, in one form. When the two accounts differ, it reminds you to make the same transfer in your bank apps.
 - **Budget for this month only:** open the envelope and change its figure. **Every month from now on:** Plan, then Standard month. Months already opened keep their figures; months planned ahead keep their own plan.
 
-## Payday, on the 25th
+## Payday
 
-The Month screen shows **It's payday** on payday. Tap it, then:
+Payday is the 27th from the December 2026 month on (the 26th or 28th when the 27th is a Friday or Saturday), and the 25th before that. The Month screen shows **It's payday** on payday. Tap it, then:
 
 1. **Check accounts.** Type what each bank app shows. For the account your salary lands in (SNB Main), type the balance *without* the salary. A difference becomes one adjustment, in the envelope you choose (Remaining by default). You can skip accounts.
 2. **Close the month.** Bills that fell due are posted first. Leftovers in spending envelopes and Rent carry over; leftovers in bills go to Remaining.
@@ -120,3 +120,7 @@ The payment is dated the moment the hub receives it and comes from the envelope'
 - **"Books out by ..."** on the Month screen: something has an envelope but no account. Send me a screenshot.
 - **A payment has no envelope**: a Siri payment used a name that is not an envelope. Tap the banner and choose one.
 - Anything else: a screenshot, please. Do not fix the sheet by hand.
+
+## When the payday changes
+
+The payday is not a setting in the app; it lives in `budget/calc.js`, in a short list called `PAYDAYS`. Each line says from which month's payday a new day applies. Months before it keep their old dates, so history never moves. Tell me the new day and I will send the updated file.

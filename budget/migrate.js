@@ -169,7 +169,9 @@
         group: GROUPS[e.group] || "Living",
         standard: standardOf(e),
         home_acct: A(home),
-        due_day: kind === "bill" && e.dueDay ? num(e.dueDay) : null,
+        /* the old app's payday was the 25th, so a bill due on the 25th is a payday bill */
+        on_payday: kind === "bill" && num(e.dueDay) === 25 ? "yes" : "",
+        due_day: kind === "bill" && e.dueDay && num(e.dueDay) !== 25 ? num(e.dueDay) : null,
         daily_cap: e.dailyCap ? num(e.dailyCap) : null,
         target: kind === "fund" && num(e.commitment) ? num(e.commitment) : null,
         target_date: kind === "fund" && e.dueDate ? e.dueDate : "",
@@ -185,6 +187,7 @@
       group: "Funds",
       standard: null,
       home_acct: A(V1.restAcct(o.accounts, "buffer")),
+      on_payday: "",
       due_day: null,
       daily_cap: null,
       target: null,
@@ -383,6 +386,7 @@
     setting("standard_salary", standardSalary);
     setting("salary_acct", A(V1.restAcct(o.accounts, "buffer")));
     setting("imported_on", today);
+    setting("payday_bills", "done");
 
     /* ---- the check ------------------------------------------------- */
     var v2 = Calc.build(t, today);

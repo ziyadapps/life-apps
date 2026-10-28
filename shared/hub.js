@@ -144,7 +144,11 @@
       });
     } catch (e) {
       this.state = "error";
-      this.error = "This device is out of room for app data.";
+      this.error =
+        e && (e.name === "QuotaExceededError" || e.code === 22)
+          ? "This device is out of room for app data."
+          : "Could not save on this device: " + ((e && e.message) || e);
+      if (global.console) global.console.error(e);
     }
   };
 
@@ -194,6 +198,8 @@
     var t = (this.tables[table] = this.tables[table] || {});
     var id = row.id || newId();
     var merged = copy(t[id]);
+    /* writing to a row that was deleted brings it back, unless this write deletes it */
+    if (merged.del && !Object.prototype.hasOwnProperty.call(row, "del")) merged.del = "";
     Object.keys(row).forEach(function (k) {
       if (k !== "ts") merged[k] = row[k];
     });
@@ -222,6 +228,7 @@
       var t = (self.tables[it.table] = self.tables[it.table] || {});
       var id = it.row.id || newId();
       var merged = copy(t[id]);
+      if (merged.del && !Object.prototype.hasOwnProperty.call(it.row, "del")) merged.del = "";
       Object.keys(it.row).forEach(function (k) {
         if (k !== "ts") merged[k] = it.row[k];
       });
