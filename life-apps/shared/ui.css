@@ -1,0 +1,401 @@
+/*
+ * Life apps: shared look.
+ *
+ * Built for one hand on an iPhone: the title and sync status at the top, the
+ * list in the middle, and the thing you do most (adding) pinned at the bottom
+ * where the thumb already is. Each app sets its own --accent on <html>, so
+ * the apps share a shape but are told apart by colour.
+ */
+
+:root {
+  --accent: #0f6e5c;
+  --accent-ink: #ffffff;
+  --accent-text: var(--accent); /* accent used for text; lifted in dark mode */
+  --ground: #f2f4f1;
+  --surface: #ffffff;
+  --ink: #18211c;
+  --muted: #5d6a63;
+  --line: #d8ded9;
+  --good: #2f7d4f;
+  --warn: #a8670f;
+  --bad: #b3261e;
+  --radius: 12px;
+  --gap: 16px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans Arabic", sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #101412;
+    --surface: #1a201d;
+    --ink: #e4ebe6;
+    --muted: #97a59d;
+    --line: #2c3530;
+    --good: #5fbf85;
+    --warn: #e3a54a;
+    --bad: #f2867d;
+    --accent-text: color-mix(in srgb, var(--accent) 55%, #ffffff);
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--ground);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--ground);
+  color: var(--ink);
+  font: 16px/1.45 var(--font);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: env(safe-area-inset-top) 0 calc(96px + env(safe-area-inset-bottom));
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+/* ---- header ---------------------------------------------------- */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px var(--gap) 12px;
+  background: var(--ground);
+  border-bottom: 1px solid var(--line);
+}
+
+.app-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.app-main {
+  padding: 8px var(--gap) var(--gap);
+}
+
+/* ---- sync status ----------------------------------------------- */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.pill[data-tone="good"] .pill-dot { background: var(--good); }
+.pill[data-tone="warn"] .pill-dot { background: var(--warn); }
+.pill[data-tone="bad"] .pill-dot { background: var(--bad); }
+.pill[data-tone="bad"] { color: var(--bad); }
+.pill[data-tone="busy"] .pill-dot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+
+@keyframes pulse {
+  50% { opacity: 0.3; }
+}
+
+/* ---- the number that matters ----------------------------------- */
+
+.figure {
+  padding: 20px 0 12px;
+}
+
+.figure-value {
+  display: block;
+  font-size: 44px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent-text);
+}
+
+.figure-label {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ---- sections and lists ---------------------------------------- */
+
+.section {
+  margin-top: 24px;
+}
+
+.section-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px 14px;
+}
+
+.row + .row {
+  border-top: 1px solid var(--line);
+}
+
+.row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-sub {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.row[data-pending] .row-sub::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+  vertical-align: 1px;
+}
+
+.empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* ---- checks ---------------------------------------------------- */
+
+.check {
+  align-items: flex-start;
+}
+
+.check-mark {
+  flex: none;
+  width: 22px;
+  font-weight: 700;
+}
+
+.check[data-pass="yes"] .check-mark { color: var(--good); }
+.check[data-pass="no"] .check-mark { color: var(--bad); }
+
+/* ---- buttons --------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.btn-quiet {
+  min-height: 36px;
+  padding: 0 10px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.btn-wide {
+  width: 100%;
+}
+
+.btn.armed {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---- forms ----------------------------------------------------- */
+
+.field {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.field-input {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 16px; /* 16px stops iOS zooming in on focus */
+}
+
+.form-error {
+  min-height: 1.45em;
+  margin: 0 0 12px;
+  color: var(--bad);
+  font-size: 14px;
+}
+
+/* ---- the add bar, pinned for the thumb ------------------------- */
+
+.composer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  background: var(--ground);
+  border-top: 1px solid var(--line);
+  padding: 10px var(--gap) calc(10px + env(safe-area-inset-bottom));
+}
+
+.composer-inner {
+  display: flex;
+  gap: 8px;
+  max-width: calc(640px - 32px);
+  margin: 0 auto;
+}
+
+.composer .field-input {
+  flex: 1;
+}
+
+/* ---- unlock ---------------------------------------------------- */
+
+.unlock {
+  padding: 48px var(--gap) var(--gap);
+}
+
+.unlock-title {
+  margin: 0 0 8px;
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--accent-text);
+}
+
+.unlock-lead {
+  margin: 0 0 28px;
+  max-width: 34em;
+  color: var(--muted);
+}
+
+/* ---- toast ----------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  z-index: 10;
+  max-width: calc(100% - 32px);
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--ground);
+  font-size: 14px;
+  transform: translate(-50%, 12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s, transform 0.18s;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { transition: none; }
+  .pill[data-tone="busy"] .pill-dot { animation: none; }
+}
