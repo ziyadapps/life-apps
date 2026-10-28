@@ -98,7 +98,7 @@ On the iPhone, open the **Shortcuts** app and tap **+**.
 1. Name the shortcut **Add test line** (tap the name at the top).
 2. Add the action **Ask for Input**. Type: Text. Prompt: `What should I add?`
 3. Add the action **Get Contents of URL**.
-   - URL: paste the hub address.
+   - URL: paste the **hub address** (script.google.com, ending in /exec), not the app's github.io address.
    - Tap the arrow to show more. Method: **POST**. Request Body: **JSON**.
    - Add these fields with **Add new field**:
 
@@ -114,10 +114,10 @@ On the iPhone, open the **Shortcuts** app and tap **+**.
 
 | Type | Key | Value |
 |---|---|---|
-| Text | name | tap the field and choose the **Provided Input** variable |
+| Text | name | tap the field and pick the **Ask for Input** variable from the bar above the keyboard (older iOS calls it Provided Input) |
 | Text | source | `shortcut` |
 
-4. Add the action **Show Result** (it shows the hub's answer).
+4. Add the action **Show Content** (older iOS calls it Show Result). It shows the hub's answer.
 5. Tap **Done**.
 
 Now say **"Hey Siri, Add test line"**, answer with any words, and you should see a result starting with `{"ok":true`. Open Hub test: the line is there, marked "from a shortcut".

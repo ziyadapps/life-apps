@@ -211,6 +211,42 @@
     return merged;
   };
 
+  /**
+   * Adds or changes many rows at once: [{ table, row }, ...]. Same as put,
+   * but saves and redraws once, for imports and bills that post themselves.
+   */
+  Hub.prototype.putMany = function (items) {
+    var self = this;
+    var out = [];
+    items.forEach(function (it) {
+      var t = (self.tables[it.table] = self.tables[it.table] || {});
+      var id = it.row.id || newId();
+      var merged = copy(t[id]);
+      Object.keys(it.row).forEach(function (k) {
+        if (k !== "ts") merged[k] = it.row[k];
+      });
+      merged.id = id;
+      if (merged.del === undefined) merged.del = "";
+      if (merged.ts === undefined) merged.ts = "";
+      t[id] = merged;
+      self.rev++;
+      var sent = copy(merged);
+      delete sent.ts;
+      self.outbox[it.table + "/" + id] = { table: it.table, row: sent, rev: self.rev };
+      out.push(merged);
+    });
+    if (!items.length) return out;
+    this.save();
+    this.emit();
+    this.soon();
+    return out;
+  };
+
+  /** A row as stored on this device, deleted or not. */
+  Hub.prototype.raw = function (table, id) {
+    return (this.tables[table] || {})[id] || null;
+  };
+
   Hub.prototype.remove = function (table, id) {
     if (!(this.tables[table] || {})[id]) return;
     this.put(table, { id: id, del: new Date().toISOString() });

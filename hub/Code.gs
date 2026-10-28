@@ -25,7 +25,7 @@
 
 /* Bump this whenever you paste in a new copy. Apps read it back from the
    published address, which proves the address serves the code you saved. */
-const VERSION = "2026-10-28a";
+const VERSION = "2026-10-28b";
 
 const TZ = "Asia/Riyadh";
 const APPS_FOLDER = "Life apps";
@@ -526,8 +526,8 @@ function ensureTable_(ss, table) {
 
 /**
  * New field names become new columns at the right. A column is a number
- * column if the first value ever sent to it is a number; it says so in the
- * note on its header cell, and keeps that type for good.
+ * column if any value sent to it when it is made is a number (blanks do not
+ * count); it says so in the note on its header cell, and keeps that type.
  */
 function addColumns_(sh, rows) {
   const lastCol = Math.max(sh.getLastColumn(), 1);
@@ -535,7 +535,12 @@ function addColumns_(sh, rows) {
   const added = [];
   rows.forEach(function (row) {
     Object.keys(row).forEach(function (k) {
-      if (k === "ts" || header.indexOf(k) >= 0 || added.some(function (a) { return a.name === k; })) return;
+      if (k === "ts" || header.indexOf(k) >= 0) return;
+      const found = added.filter(function (a) { return a.name === k; })[0];
+      if (found) {
+        if (typeof row[k] === "number") found.num = true;
+        return;
+      }
       if (!/^[a-z_][a-z0-9_]{0,39}$/i.test(k)) throw fail_("\"" + k + "\" is not a valid column name.");
       added.push({ name: k, num: typeof row[k] === "number" });
     });

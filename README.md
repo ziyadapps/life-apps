@@ -6,6 +6,7 @@ Personal home-screen apps that share one Google Apps Script hub.
 |---|---|
 | `hub/` | `Code.gs`, the hub script. It lives inside the "Life apps hub" Google Sheet. No secrets in it. |
 | `shared/` | Code every app uses: `hub.js` (offline-first sync), `kit.js` (unlock, status, helpers), `ui.css` (the look), `sw-core.js` (opening with no signal). |
+| `budget/` | Budget v2: `calc.js` (all the arithmetic), `app.js` (screens), `migrate.js` and `v1-ledger.js` (one-time import from the old app). |
 | `test/` | Hub test, the smallest app, used to prove the hub works. |
 | `docs/` | Setup guides. |
 
