@@ -517,10 +517,47 @@
    *
    * existing: function(id) -> row or null, deleted rows included
    */
+  /*
+   * The day a subscription charges inside a month: its day of the month,
+   * and for a yearly one only in the calendar month it renews.
+   */
+  function subDate(month, sub) {
+    if (!num(sub.day)) return null;
+    var date = dueDate(month, sub.day);
+    if (sub.every === "year" && Number(date.slice(5, 7)) !== Number(sub.month)) return null;
+    return date;
+  }
+
+  function subId(month, subIdValue) {
+    return "sub-" + month + "-" + subIdValue;
+  }
+
+  /** Active subscriptions by envelope. */
+  function subsByEnv(data) {
+    var out = {};
+    (data.subs || []).forEach(function (s) {
+      if (s.del || s.active === "no" || !(num(s.amount) > 0)) return;
+      (out[s.env] = out[s.env] || []).push(s);
+    });
+    return out;
+  }
+
+  /** What a list costs a month: monthly ones, plus a twelfth of the yearly ones. */
+  function subsMonthly(subs) {
+    var monthly = 0;
+    var yearly = 0;
+    subs.forEach(function (s) {
+      if (s.every === "year") yearly += num(s.amount);
+      else monthly += num(s.amount);
+    });
+    return { monthly: r2(monthly), yearly: r2(yearly), perMonth: r2(monthly + yearly / 12) };
+  }
+
   function duePosts(data, today, existing) {
     var ix = index(data);
     var start = ix.settings.start_month || "";
     var out = [];
+    var subs = subsByEnv(data);
     (data.months || []).forEach(function (mrow) {
       /* closed months too: a bill that fell due before the month was closed still happened */
       if (mrow.status !== "open" && mrow.status !== "closed") return;
@@ -531,6 +568,19 @@
         if (x.month === month) b[x.env] = num(x.amount);
       });
       ix.envs.forEach(function (e) {
+        /* an envelope with a subscriptions list posts each one on its own day, not the whole envelope */
+        if (subs[e.id]) {
+          /* a month already paid in one payment (before the list existed) is left as it is */
+          if (existing(billId(month, e.id))) return;
+          subs[e.id].forEach(function (sub) {
+            var sd = subDate(month, sub);
+            if (!sd || sd > today) return;
+            var sid = subId(month, sub.id);
+            if (existing(sid)) return;
+            out.push({ id: sid, date: sd, env: e.id, acct: homeOf(ix, e.id) || "", amount: num(sub.amount), label: "Subscription", note: sub.name || "", kind: "spend", source: "auto", sub: sub.id });
+          });
+          return;
+        }
         if (e.kind !== "bill") return;
         var amount = num(b[e.id]);
         if (!amount) return;
@@ -615,6 +665,10 @@
     planFor: planFor,
     billId: billId,
     duePosts: duePosts,
+    subDate: subDate,
+    subId: subId,
+    subsByEnv: subsByEnv,
+    subsMonthly: subsMonthly,
     transferSheet: transferSheet,
   };
 

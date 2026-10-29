@@ -12,6 +12,7 @@
   var TABLES = [
     "envelopes", "accounts", "splits", "months", "budgets", "payments",
     "moves", "reconciles", "reserves", "reserve_moves", "planned", "labels", "settings",
+    "subs", "sms", "memory",
   ];
   var GROUPS = ["Living", "Bills", "Committed", "Funds"];
   var KIND_NAMES = { spending: "Spending", bill: "Bill", fund: "Fund", remaining: "Remaining" };
@@ -380,6 +381,8 @@
     if (payBanner) main.appendChild(payBanner);
     var tripBanner = tripsBanner();
     if (tripBanner) main.appendChild(tripBanner);
+    var smsB = smsBanner();
+    if (smsB) main.appendChild(smsB);
     dailyCards(mo, M).forEach(function (c) {
       main.appendChild(c);
     });
@@ -523,6 +526,15 @@
         h("a", { class: "btn", href: "#/edit-env/" + id, style: "text-decoration:none" }, "Settings")
       )
     );
+
+    if (e.kind === "bill" || e.kind === "spending") {
+      var subs = subsOf(id);
+      var sl = h("a", { class: "row-link", href: "#/subs/" + id, id: "subs-link" },
+        h("div", { class: "row-main" }, h("span", { class: "row-title" }, subs.length ? "Subscriptions (" + subs.length + ")" : "Subscriptions list"),
+          h("span", { class: "row-sub" }, subs.length ? money(Calc.subsMonthly(subs).perMonth) + " a month, each posts on its own day" : "For an envelope paid in several charges through the month")),
+        chevron());
+      main.appendChild(h("div", { class: "list", style: "margin-top:12px" }, sl));
+    }
 
     var pays = paymentsIn(M, function (p) {
       return envOfPayment(p) === id;
@@ -751,10 +763,10 @@
     main.appendChild(back("Back", query.from ? "/env/" + query.from : "/"));
     main.appendChild(h("div", null, title(existing ? "Move" : "Move money", "From one envelope or account to another. When the two accounts differ, make the same transfer in your bank apps.")));
 
-    var fromEnv = select(envOptions(true, "No envelope (account only)"), existing ? existing.from_env : query.from || "", { id: "mv-from-env" });
-    var fromAcct = select(acctOptions(true, "No account (envelope only)"), existing ? existing.from_acct : query.from ? Calc.homeOf(S.model.index, query.from) || "" : "", { id: "mv-from-acct" });
-    var toEnv = select(envOptions(true, "No envelope (account only)"), existing ? existing.to_env : "", { id: "mv-to-env" });
-    var toAcct = select(acctOptions(true, "No account (envelope only)"), existing ? existing.to_acct : "", { id: "mv-to-acct" });
+    var fromEnv = select(envOptions(true, "No envelope (account only)"), existing ? existing.from_env : query.from || onlyEnvOf(query.from_acct), { id: "mv-from-env" });
+    var fromAcct = select(acctOptions(true, "No account (envelope only)"), existing ? existing.from_acct : query.from ? Calc.homeOf(S.model.index, query.from) || "" : query.from_acct || "", { id: "mv-from-acct" });
+    var toEnv = select(envOptions(true, "No envelope (account only)"), existing ? existing.to_env : onlyEnvOf(query.to_acct), { id: "mv-to-env" });
+    var toAcct = select(acctOptions(true, "No account (envelope only)"), existing ? existing.to_acct : query.to_acct || "", { id: "mv-to-acct" });
     fromEnv.addEventListener("change", function () {
       fromAcct.value = Calc.homeOf(S.model.index, fromEnv.value) || "";
       explain();
@@ -763,8 +775,8 @@
       toAcct.value = Calc.homeOf(S.model.index, toEnv.value) || "";
       explain();
     });
-    var amount = numberInput(existing ? existing.amount : "", { id: "mv-amount", placeholder: "0.00" });
-    var date = h("input", { class: "field-input", type: "date", value: existing ? Calc.dateOf(existing) : today(), id: "mv-date" });
+    var amount = numberInput(existing ? existing.amount : query.amount || "", { id: "mv-amount", placeholder: "0.00" });
+    var date = h("input", { class: "field-input", type: "date", value: existing ? Calc.dateOf(existing) : query.date || today(), id: "mv-date" });
     var note = h("input", { class: "field-input", type: "text", value: existing ? existing.note || "" : "", placeholder: "Optional", id: "mv-note" });
     var expl = h("p", { class: "note" });
     function explain() {
@@ -800,7 +812,8 @@
         if (statusOf(Calc.monthOf(d)) === "closed") { msg.textContent = Calc.monthLabel(Calc.monthOf(d)) + " is closed. Change the date."; return; }
         var row = { date: d, from_env: fromEnv.value, from_acct: fromAcct.value, to_env: toEnv.value, to_acct: toAcct.value, amount: n, note: note.value.trim() };
         if (existing) row.id = existing.id;
-        S.hub.put("moves", row);
+        var saved = S.hub.put("moves", row);
+        if (query.sms) S.hub.put("sms", { id: query.sms, status: "move-ok", ref: saved.id });
         Kit.toast("Moved " + money(n));
         history.length > 1 ? history.back() : go("/");
       }))
@@ -1251,6 +1264,7 @@
       ["/reserves", "Reserves and planned money", "Portfolio, other reserves, things you expect to pay or receive"],
       ["/history", "History", "Past months and their payments"],
       ["/trips", "Shopping trips", "From Household, to post or leave out"],
+      ["/inbox", "Bank messages", "Your bank SMS, read and logged"],
       ["/setup", "Envelopes and accounts", "Names, kinds, home accounts, due days, labels"],
       ["/import", "Bring in old books", "One time, from the old budget app"],
     ];
@@ -1443,18 +1457,18 @@
     var bank = h("input", { class: "field-input", type: "text", value: a.bank || "", id: "a-bank", placeholder: "Rajhi, SNB, Cash ..." });
     var type = select([{ value: "bank", label: "Bank account" }, { value: "savings", label: "Savings" }, { value: "cash", label: "Cash" }], a.type || "bank", { id: "a-type" });
     var active = select([{ value: "yes", label: "Shown" }, { value: "no", label: "Hidden" }], a.active || "yes", { id: "a-active" });
+    var smsNums = h("input", { class: "field-input", type: "text", value: a.sms || "", id: "a-sms", placeholder: "Like 1234 5678", autocomplete: "off" });
     main.appendChild(field("Name", name));
     main.appendChild(field("Bank", bank, "Payday transfers are grouped by bank."));
     main.appendChild(field("Type", type));
     main.appendChild(field("Visibility", active));
-    main.appendChild(field("Show in Household", inHousehold, "Household shows this envelope's balance to everyone with a Household key. You still post the purchases."));
-    main.appendChild(field("Arabic name for Household", nameAr));
+    main.appendChild(field("Numbers in bank messages", smsNums, "The last 4 digits of this account and its cards, with spaces between. For a wallet whose messages carry no number, its name (barq)."));
     var msg = errorLine();
     main.appendChild(msg);
     main.appendChild(h("div", { class: "save-bar" }, primary(isNew ? "Add account" : "Save account", function () {
       var nm = name.value.trim();
       if (!nm) { msg.textContent = "Give it a name."; return; }
-      var row = { name: nm, bank: bank.value.trim(), type: type.value, active: active.value };
+      var row = { name: nm, bank: bank.value.trim(), type: type.value, active: active.value, sms: smsNums.value.trim() };
       if (isNew) {
         var nid = Migrate.slug(nm);
         while (S.model.index.acct[nid]) nid = Migrate.slug(nm) + "-" + Hub.newId().slice(0, 3);
@@ -1974,11 +1988,406 @@
   }
 
   /* ---------------------------------------------------------------- */
+  /*  Subscriptions: a list inside an envelope                         */
+  /* ---------------------------------------------------------------- */
+
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function subsOf(envId, all) {
+    return (S.data.subs || [])
+      .filter(function (s) { return s.env === envId && (all || s.active !== "no"); })
+      .sort(function (a, b) { return Calc.num(a.day) - Calc.num(b.day) || String(a.name).localeCompare(String(b.name)); });
+  }
+
+  function ordinal(n) {
+    n = Number(n);
+    var s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th";
+    return n + s;
+  }
+
+  function subWhen(s) {
+    return s.every === "year" ? "Every year, " + Number(s.day) + " " + (MONTHS[Number(s.month) - 1] || "") : "Every month on the " + ordinal(s.day);
+  }
+
+  /** This month's state of one subscription: paid (and when), due on a day, or not this month. */
+  function subState(s, M) {
+    if (!Calc.subDate(M, s)) return { paid: null, text: "Not this month" };
+    if (S.data.payments.some(function (p) { return p.id === Calc.billId(M, s.env); })) return { paid: true, text: "Paid on payday with the whole envelope this month" };
+    var pid = Calc.subId(M, s.id);
+    var paid = S.data.payments.filter(function (p) { return p.id === pid || (p.sub === s.id && Calc.monthOf(Calc.dateOf(p)) === M); })[0];
+    if (paid) {
+      var bySms = S.data.sms.some(function (m) { return m.ref === paid.id && (m.status === "updated" || m.status === "posted"); });
+      return { paid: paid, text: "Paid " + Calc.dayLabel(Calc.dateOf(paid)) + (Calc.r2(Calc.num(paid.amount)) !== Calc.r2(Calc.num(s.amount)) ? ", " + money(paid.amount) : "") + (bySms ? ", confirmed by the bank" : "") };
+    }
+    var d = Calc.subDate(M, s);
+    return { paid: null, text: d ? "Due " + Calc.dayLabel(d) : "Not this month" };
+  }
+
+  function viewSubs(main, envId) {
+    var e = env(envId);
+    if (!e) return viewMissing(main);
+    var M = S.model.current;
+    main.appendChild(back(e.name, "/env/" + envId));
+    main.appendChild(h("div", null, title("Subscriptions", "In " + e.name + ". Each one posts itself on its own day, and its bank message corrects the amount.")));
+    var all = subsOf(envId, true);
+    var list = h("div", { class: "list", id: "subs" });
+    if (!all.length) list.appendChild(h("div", { class: "empty" }, "None yet."));
+    all.forEach(function (s) {
+      var st = subState(s, M);
+      list.appendChild(h("a", { class: "row-link", href: "#/sub/" + s.id, "data-sub": s.id },
+        h("div", { class: "row-main" }, h("span", { class: "row-title" }, s.name + (s.active === "no" ? " (stopped)" : "")), h("span", { class: "row-sub" }, subWhen(s) + ". " + (s.active === "no" ? "" : st.text))),
+        amountText(s.amount, s.every === "year" ? "muted" : ""), chevron()));
+    });
+    main.appendChild(list);
+    main.appendChild(h("div", { class: "btn-row", style: "margin-top:10px" }, h("a", { class: "btn btn-primary", href: "#/sub/new?env=" + envId, style: "text-decoration:none" }, "Add a subscription")));
+
+    var t = Calc.subsMonthly(subsOf(envId));
+    if (all.length) {
+      var rows = h("div", { class: "list" });
+      rows.appendChild(kv("Monthly ones", money(t.monthly)));
+      if (t.yearly) rows.appendChild(kv("Yearly ones, " + money(t.yearly) + " a year", money(Calc.r2(t.yearly / 12)) + " a month"));
+      rows.appendChild(kv("Set aside each month", money(t.perMonth)));
+      rows.appendChild(kv("Standard month now", money(e.standard)));
+      main.appendChild(section("What it costs", rows));
+      if (Calc.r2(Calc.num(e.standard)) !== t.perMonth) {
+        main.appendChild(h("div", { class: "btn-row", style: "margin-top:8px" }, h("button", { class: "btn", type: "button", id: "subs-standard", onclick: function () {
+          S.hub.put("envelopes", { id: envId, standard: t.perMonth });
+          Kit.toast("Standard month for " + e.name + " is " + money(t.perMonth));
+          render();
+        } }, "Make " + money(t.perMonth) + " the standard month")));
+      }
+      if (t.yearly && e.kind === "bill") {
+        main.appendChild(h("p", { class: "note" }, "This envelope is a Bill, so what is left goes to Remaining at the end of each month, and the money set aside for yearly ones would not build up. Change its kind to Spending in Settings."));
+      }
+    }
+  }
+
+  function viewSub(main, id, query) {
+    var isNew = id === "new";
+    var s = isNew ? { env: query.env || "", every: "month", active: "yes" } : (S.data.subs || []).filter(function (x) { return x.id === id; })[0];
+    if (!s || !env(s.env)) return viewMissing(main);
+    main.appendChild(back("Subscriptions", "/subs/" + s.env));
+    main.appendChild(h("h1", { class: "page-title" }, isNew ? "New subscription" : s.name));
+    var name = h("input", { class: "field-input", type: "text", id: "sub-name", value: s.name || "", placeholder: "Netflix" });
+    var amount = numberInput(s.amount, { id: "sub-amount", placeholder: "0.00" });
+    var day = numberInput(s.day, { id: "sub-day", inputmode: "numeric", placeholder: "1 to 31" });
+    var every = select([{ value: "month", label: "Every month" }, { value: "year", label: "Every year" }], s.every || "month", { id: "sub-every" });
+    var month = select(MONTHS.map(function (m, i) { return { value: String(i + 1), label: m }; }), s.month || "1", { id: "sub-month" });
+    var merchant = h("input", { class: "field-input", type: "text", id: "sub-merchant", value: s.merchant || "", placeholder: "Optional, like NETFLIX", dir: "ltr" });
+    var active = select([{ value: "yes", label: "Active" }, { value: "no", label: "Stopped" }], s.active || "yes", { id: "sub-active" });
+    main.appendChild(field("Name", name));
+    main.appendChild(h("div", { class: "two" }, field("Amount", amount), field("Day it charges", day)));
+    main.appendChild(field("How often", every));
+    var monthField = field("Month it renews", month);
+    main.appendChild(monthField);
+    function showMonth() { monthField.hidden = every.value !== "year"; }
+    every.addEventListener("change", showMonth);
+    showMonth();
+    main.appendChild(field("Name in the bank message", merchant, "How it shows in the SMS. Leave it empty if the name is the same."));
+    main.appendChild(field("Status", active));
+    var msg = errorLine();
+    main.appendChild(msg);
+    main.appendChild(h("div", { class: "save-bar" }, primary(isNew ? "Add subscription" : "Save", function () {
+      var nm = name.value.trim();
+      var n = readNumber(amount);
+      var d = readNumber(day);
+      if (!nm) { msg.textContent = "Give it a name."; return; }
+      if (n === null || isNaN(n) || n <= 0) { msg.textContent = "Type the amount, more than 0."; return; }
+      if (d === null || isNaN(d) || d < 1 || d > 31) { msg.textContent = "The day is a day of the month, 1 to 31."; return; }
+      var row = { env: s.env, name: nm, amount: n, day: Math.round(d), every: every.value, month: every.value === "year" ? Number(month.value) : 0, merchant: merchant.value.trim(), active: active.value };
+      if (!isNew) row.id = s.id;
+      S.hub.put("subs", row);
+      Kit.toast(nm + (isNew ? " added" : " saved"));
+      go("/subs/" + s.env);
+    })));
+    if (!isNew) {
+      main.appendChild(h("div", { class: "btn-row", style: "margin-top:12px" }, Kit.confirmButton("Delete", "Tap again to delete", function () {
+        S.hub.remove("subs", s.id);
+        go("/subs/" + s.env);
+      })));
+    }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  Bank messages                                                    */
+  /* ---------------------------------------------------------------- */
+
+  var BANK_NAMES = { rajhi: "Al Rajhi", snb: "SNB", alinma: "Alinma", sab: "SAB", stc: "STC Bank", urpay: "UrPay", barq: "Barq", anb: "ANB" };
+
+  /** The single envelope an account holds, if it holds only one. */
+  function onlyEnvOf(acctId) {
+    if (!acctId) return "";
+    var held = activeEnvs().filter(function (e) { return e.home_acct === acctId && e.kind !== "remaining"; });
+    return held.length === 1 ? held[0].id : "";
+  }
+
+  function smsIgnore() {
+    return String(setting("sms_ignore") || "").split(/[\s,]+/).filter(String);
+  }
+
+  function smsMemory() {
+    var m = {};
+    (S.data.memory || []).forEach(function (r) { if (r.key) m[r.key] = r.env; });
+    return m;
+  }
+
+  function arrivedDay(ts) {
+    return ts ? Calc.ymd(new Date(ts)) : today();
+  }
+
+  /*
+   * Reads new messages and acts on them: logs, matches, corrects bills and
+   * subscriptions, or leaves them for you. Runs once this device has caught
+   * up, like bills posting themselves.
+   */
+  function processSms() {
+    if (!S.syncedOnce || !hasBooks() || S.processing) return;
+    var todo = S.data.sms.filter(function (r) { return r.ts && r.text && (!r.status || r.status === "waiting"); })
+      .sort(function (a, b) { return String(a.ts) < String(b.ts) ? -1 : 1; });
+    if (!todo.length) return;
+    S.processing = true;
+    try {
+      var linked = {};
+      S.data.sms.forEach(function (r) { if (r.ref) linked[r.ref] = 1; });
+      var others = S.data.sms.filter(function (r) { return r.status && r.status !== "waiting"; }).map(function (r) { return { date: r.date, status: r.status, amount: Calc.num(r.amount) }; });
+      var trips = S.household ? S.household.all("trips") : [];
+      var ctx = {
+        accounts: S.model.index.accts,
+        envs: activeEnvs(),
+        ignore: smsIgnore(),
+        memory: smsMemory(),
+        subs: S.data.subs || [],
+        payments: S.data.payments,
+        trips: trips,
+        others: others,
+        linked: linked,
+        now: new Date().toISOString(),
+        closed: function (m) { return statusOf(m) === "closed"; },
+      };
+      var pays = [];
+      var smsRows = [];
+      var tripMarks = [];
+      var seen = S.data.sms.filter(function (o) { return o.status && o.status !== "waiting" && o.status !== "duplicate"; });
+      todo.forEach(function (r) {
+        var text = Sms.clean(r.text);
+        /* the same message twice (two automations both caught it) is read once */
+        var twin = seen.filter(function (o) {
+          return o.id !== r.id && Sms.clean(o.text) === text && Math.abs(Date.parse(o.ts) - Date.parse(r.ts)) < 30 * 60000;
+        })[0];
+        if (twin) {
+          smsRows.push({ id: r.id, status: "duplicate", ref: twin.id, bank: twin.bank || "", amount: Calc.num(twin.amount), date: twin.date || "", merchant: twin.merchant || "" });
+          return;
+        }
+        var p = Sms.read(r.text, r.sender, arrivedDay(r.ts));
+        var d = Sms.decide(r, p, ctx);
+        var row = { id: r.id, kind: p.type, bank: p.bank, amount: p.amount || 0, date: p.date || "", merchant: p.merchant || p.biller || "", status: d.status };
+        switch (d.status) {
+          case "post":
+            pays.push(d.payment);
+            linked[d.payment.id] = 1;
+            Object.assign(row, { status: "posted", ref: d.payment.id, env: d.payment.env, acct: d.payment.acct, flag: d.flag || "", sub: d.sub || "" });
+            break;
+          case "match":
+            Object.assign(row, { status: "matched", ref: d.ref });
+            linked[d.ref] = 1;
+            if (d.postTrip) {
+              var tr = trips.filter(function (x) { return x.id === d.postTrip.trip; })[0];
+              pays.push(tripPayment(tr, d.postTrip.env, d.postTrip.acct, p.amount, String(tr.date || p.date).slice(0, 10), tripItems(tr)));
+              tripMarks.push({ table: "trips", row: { id: tr.id, env: d.postTrip.env, budget: "posted", budget_ref: "trip-" + tr.id, posted: new Date().toISOString() } });
+              row.trip = tr.id;
+            }
+            break;
+          case "update":
+            pays.push({ id: d.ref, amount: d.amount });
+            Object.assign(row, { status: "updated", ref: d.ref, was: d.was, env: d.env || "", flag: d.flag || "", sub: d.sub || "" });
+            linked[d.ref] = 1;
+            break;
+          case "move":
+            Object.assign(row, { status: d.payday ? "move-ok" : "move", from_acct: d.from || "", to_acct: d.to || "" });
+            break;
+          case "ignored":
+            row.why = d.why || "";
+            break;
+          case "review":
+            Object.assign(row, { reason: d.reason, number: d.number || "", key: d.key || "", what: d.what || p.merchant || p.biller || "", acct: d.acct || "" });
+            break;
+        }
+        seen.push(r);
+        if (d.status === "waiting" && r.status === "waiting") return;
+        others.push({ date: row.date, status: row.status, amount: row.amount });
+        smsRows.push(row);
+      });
+      var writes = pays.map(function (x) { return { table: "payments", row: x }; }).concat(smsRows.map(function (x) { return { table: "sms", row: x }; }));
+      if (writes.length) S.hub.putMany(writes);
+      if (tripMarks.length && S.household) S.household.putMany(tripMarks);
+    } finally {
+      S.processing = false;
+    }
+  }
+
+  /** Messages that need a look: something to choose, a move to log, or text that could not be read. */
+  function smsWaiting() {
+    return S.data.sms.filter(function (r) { return r.status === "review" || r.status === "unread" || r.status === "move"; });
+  }
+
+  function smsBanner() {
+    var n = smsWaiting().length;
+    if (!n) return null;
+    return h("a", { class: "banner", href: "#/inbox", id: "sms-banner", "data-tone": "warn" },
+      h("span", { class: "banner-title" }, n === 1 ? "1 bank message needs you" : n + " bank messages need you"),
+      h("span", { class: "banner-text" }, "Choose an envelope, link a card, or log a move."));
+  }
+
+  function smsHead(r) {
+    return [BANK_NAMES[r.bank] || r.bank || "Bank", r.date ? Calc.dayLabel(r.date) : "", r.merchant].filter(String).join(", ");
+  }
+
+  function rawText(r) {
+    return h("details", { class: "sms-raw" }, h("summary", null, "Message"), h("pre", null, Sms.clean(r.text)));
+  }
+
+  /* after you link a number or teach a merchant, the messages waiting on it are read again */
+  function rereadWhere(test) {
+    var rows = S.data.sms.filter(function (r) { return r.status === "review" && test(r); }).map(function (r) { return { table: "sms", row: { id: r.id, status: "" } }; });
+    if (rows.length) S.hub.putMany(rows);
+  }
+
+  function smsCard(r) {
+    var box = h("div", { class: "card-pad sms", "data-sms": r.id });
+    var msg = errorLine();
+    var head = h("div", { class: "sms-head" }, h("span", { class: "row-title" }, smsHead(r)), Calc.num(r.amount) ? h("span", { class: "amt" + (r.reason === "money-in" ? " in" : "") }, money(r.amount)) : null);
+    box.appendChild(head);
+
+    if (r.status === "unread") {
+      box.appendChild(h("p", { class: "note" }, "This message could not be read."));
+      box.appendChild(rawText(r));
+      box.appendChild(h("div", { class: "btn-row" },
+        h("a", { class: "btn", href: "#/add", style: "text-decoration:none" }, "Add payment"),
+        h("button", { class: "btn btn-quiet", type: "button", onclick: function () { S.hub.put("sms", { id: r.id, status: "ignored", why: "dismissed" }); render(); } }, "Dismiss")));
+      return box;
+    }
+
+    if (r.status === "move") {
+      box.appendChild(h("p", { class: "note" }, "Between your accounts: " + (r.from_acct ? acctName(r.from_acct) : "another account") + " to " + (r.to_acct ? acctName(r.to_acct) : "another account") + ". If it changed what the money is for, log it as a move."));
+      box.appendChild(rawText(r));
+      var q = "?amount=" + Calc.num(r.amount) + "&date=" + r.date + "&sms=" + r.id + (r.from_acct ? "&from_acct=" + r.from_acct : "") + (r.to_acct ? "&to_acct=" + r.to_acct : "");
+      box.appendChild(h("div", { class: "btn-row" },
+        h("a", { class: "btn btn-primary", href: "#/move" + q, style: "text-decoration:none" }, "Log as a move"),
+        h("button", { class: "btn", type: "button", onclick: function () { S.hub.put("sms", { id: r.id, status: "move-ok" }); render(); } }, "Nothing to log")));
+      return box;
+    }
+
+    if (r.reason === "link" || r.reason === "link-bank") {
+      var label = r.reason === "link" ? "Which account is " + (BANK_NAMES[r.bank] || "") + " " + r.number + "?" : "Which account sends these " + (BANK_NAMES[r.bank] || r.bank) + " messages?";
+      var opts = acctOptions(true, "Choose").concat([{ value: "*ignore", label: "Not in the books (ignore it)" }]);
+      var sel = select(opts, "", { "aria-label": label, class: "select sms-link" });
+      box.appendChild(h("p", { class: "note" }, label));
+      box.appendChild(sel);
+      box.appendChild(rawText(r));
+      box.appendChild(msg);
+      box.appendChild(h("div", { class: "btn-row" }, h("button", { class: "btn btn-primary", type: "button", onclick: function () {
+        if (!sel.value) { msg.textContent = "Choose an account."; return; }
+        var token = r.reason === "link" ? r.number : r.bank;
+        if (sel.value === "*ignore") {
+          S.hub.put("settings", { id: "sms_ignore", value: smsIgnore().concat([token]).join(" ") });
+        } else {
+          var a = S.model.index.acct[sel.value];
+          var list = String(a.sms || "").split(/\s+/).filter(String);
+          if (list.indexOf(token) < 0) list.push(token);
+          S.hub.put("accounts", { id: a.id, sms: list.join(" ") });
+        }
+        rereadWhere(function (x) { return x.reason === r.reason && (x.number === r.number && x.bank === r.bank); });
+        render();
+      } }, "Save")));
+      return box;
+    }
+
+    if (r.reason === "closed") {
+      box.appendChild(h("p", { class: "note" }, Calc.monthLabel(Calc.monthOf(r.date)) + " is closed, so this was not logged."));
+      box.appendChild(rawText(r));
+      box.appendChild(h("div", { class: "btn-row" }, h("button", { class: "btn", type: "button", onclick: function () { S.hub.put("sms", { id: r.id, status: "ignored", why: "closed" }); render(); } }, "Dismiss")));
+      return box;
+    }
+
+    /* spend or money in: choose the envelope, and remember the merchant */
+    var held = activeEnvs().filter(function (e) { return e.home_acct === r.acct && e.kind !== "remaining"; });
+    var envSel = select(envOptions(true, "Choose an envelope"), held.length === 1 ? held[0].id : "", { "aria-label": "Envelope", class: "select sms-env" });
+    var remember = h("input", { type: "checkbox", checked: !!r.key, class: "sms-remember" });
+    box.appendChild(h("p", { class: "note" }, (r.reason === "money-in" ? "Money in" : "Paid") + (r.acct ? " from " + acctName(r.acct) : "") + (held.length > 1 ? ". " + acctName(r.acct) + " holds " + held.map(function (e) { return e.name; }).join(", ") + "." : ".")));
+    box.appendChild(field("Envelope", envSel));
+    if (r.key) box.appendChild(h("label", { class: "check-line" }, remember, h("span", null, "Next time, put \"" + (r.what || r.merchant) + "\" here by itself")));
+    box.appendChild(rawText(r));
+    box.appendChild(msg);
+    box.appendChild(h("div", { class: "btn-row" },
+      h("button", { class: "btn btn-primary", type: "button", onclick: function () {
+        if (!envSel.value) { msg.textContent = "Choose an envelope."; return; }
+        var amt = Calc.num(r.amount);
+        var pay = { id: "sms-" + r.id, date: r.date, env: envSel.value, acct: r.acct || "", amount: r.reason === "money-in" ? -amt : amt, label: "", note: r.what || r.merchant || "", kind: r.reason === "money-in" ? "income" : "spend", source: "sms" };
+        var w = [{ table: "payments", row: pay }, { table: "sms", row: { id: r.id, status: "posted", ref: pay.id, env: envSel.value } }];
+        if (r.key && remember.checked) w.push({ table: "memory", row: { id: Sms.memoryId(r.key), key: r.key, env: envSel.value } });
+        S.hub.putMany(w);
+        if (r.key && remember.checked) rereadWhere(function (x) { return x.key === r.key && x.id !== r.id; });
+        Kit.toast("Logged " + money(amt) + " in " + envName(envSel.value));
+        render();
+      } }, "Log it"),
+      h("button", { class: "btn btn-quiet", type: "button", onclick: function () { S.hub.put("sms", { id: r.id, status: "ignored", why: "dismissed" }); render(); } }, "Ignore")));
+    return box;
+  }
+
+  function smsDoneLine(r) {
+    var what;
+    var undo = null;
+    var extra = null;
+    if (r.status === "posted") {
+      what = "Logged in " + envName(r.env);
+      undo = function () {
+        S.hub.remove("payments", r.ref);
+        S.hub.put("sms", { id: r.id, status: "review", reason: Calc.num(r.amount) && /refund|transfer_in|topup/.test(r.kind) ? "money-in" : "spend", key: r.key || (r.acct && r.merchant ? Sms.memoryKey("merchant", r.acct, r.merchant) : ""), what: r.merchant });
+        render();
+      };
+    } else if (r.status === "matched") what = r.trip ? "Matched her Household trip, now in Budget" : "Already in your books";
+    else if (r.status === "updated") what = (r.sub ? "Subscription" : "Bill") + (Calc.r2(Calc.num(r.was)) === Calc.r2(Calc.num(r.amount)) ? " confirmed by the bank" : " corrected: " + money(r.amount) + " (it had posted at " + money(r.was) + ")");
+    else if (r.status === "move-ok") what = "Between your accounts";
+    else if (r.status === "duplicate") what = "Same message twice";
+    else if (r.status === "waiting") {
+      what = "Waiting up to 12 hours for her Household trip";
+      extra = h("button", { class: "btn btn-quiet", type: "button", onclick: function () { S.hub.put("sms", { id: r.id, status: "", force: "yes" }); } }, "Log now");
+    } else what = { salary: "Salary: payday takes care of it", untracked: "Card outside the books", notice: "Notice, nothing to log", dismissed: "Dismissed", closed: "Month closed" }[r.why] || "Ignored";
+    if (r.flag === "price" && r.sub) {
+      var sub = (S.data.subs || []).filter(function (s) { return s.id === r.sub; })[0];
+      if (sub && Calc.r2(Calc.num(sub.amount)) !== Calc.r2(Calc.num(r.amount))) {
+        what += ". The list says " + money(sub.amount);
+        extra = h("button", { class: "btn btn-quiet", type: "button", onclick: function () { S.hub.put("subs", { id: sub.id, amount: Calc.num(r.amount) }); Kit.toast(sub.name + " is now " + money(r.amount)); render(); } }, "Update the list");
+      }
+    }
+    return h("div", { class: "row", "data-sms": r.id },
+      h("div", { class: "row-main" }, h("span", { class: "row-title" }, smsHead(r)), h("span", { class: "row-sub" }, what)),
+      amountText(r.amount, "muted"),
+      extra,
+      undo ? Kit.confirmButton("Undo", "Tap again", undo, "btn btn-quiet") : null);
+  }
+
+  function viewInbox(main) {
+    main.appendChild(back("Back", "/"));
+    main.appendChild(h("div", null, title("Bank messages", "Your bank SMS, read and logged. What could not be decided waits here.")));
+    var waiting = smsWaiting().sort(function (a, b) { return String(a.ts) < String(b.ts) ? -1 : 1; });
+    if (!waiting.length) main.appendChild(h("div", { class: "list" }, h("div", { class: "empty" }, "Nothing needs you.")));
+    waiting.forEach(function (r) { main.appendChild(section(null, smsCard(r))); });
+    var done = S.data.sms.filter(function (r) { return r.status && r.status !== "review" && r.status !== "unread" && r.status !== "move"; })
+      .sort(function (a, b) { return String(b.ts) < String(a.ts) ? -1 : 1; })
+      .slice(0, 50);
+    if (done.length) main.appendChild(section("Recent", h("div", { class: "list", id: "sms-done" }, done.map(smsDoneLine))));
+    var ign = h("input", { class: "field-input", type: "text", id: "sms-ignore", value: smsIgnore().join(" "), placeholder: "Like 9876" });
+    main.appendChild(section("Cards outside the books", h("div", null, field("Numbers to ignore", ign, "Messages for these cards or accounts are never logged."),
+      h("button", { class: "btn", type: "button", onclick: function () { S.hub.put("settings", { id: "sms_ignore", value: ign.value.trim() }); Kit.toast("Saved"); } }, "Save"))));
+  }
+
+  /* ---------------------------------------------------------------- */
   /*  routing                                                          */
   /* ---------------------------------------------------------------- */
 
   /* screens with inputs are not redrawn when a sync lands, so typing is never lost */
-  var FORMS = { add: 1, move: 1, payday: 1, "payday-acct": 1, plan: 1, month: 1, "edit-env": 1, "edit-acct": 1, reserves: 1, import: 1, env: 1, acct: 1, setup: 1, trips: 1 };
+  var FORMS = { add: 1, move: 1, payday: 1, "payday-acct": 1, plan: 1, month: 1, "edit-env": 1, "edit-acct": 1, reserves: 1, import: 1, env: 1, acct: 1, setup: 1, trips: 1, inbox: 1, sub: 1 };
 
   function parseRoute() {
     var raw = (location.hash || "#/").slice(1);
@@ -2021,6 +2430,9 @@
       case "history": a[0] ? viewHistoryMonth(main, a[0]) : viewHistory(main); break;
       case "import": viewImport(main); break;
       case "trips": viewTrips(main); break;
+      case "inbox": viewInbox(main); break;
+      case "subs": viewSubs(main, a[0]); break;
+      case "sub": viewSub(main, a[0], r.query); break;
       default: viewMissing(main);
     }
     paintTabs(r.name);
@@ -2043,7 +2455,7 @@
   }
 
   function paintTabs(name) {
-    var owner = { "": "", env: "", accounts: "accounts", acct: "accounts", plan: "plan", month: "plan", more: "more", setup: "more", "edit-env": "more", "edit-acct": "more", reserves: "more", history: "more", import: "more", payday: "", "payday-acct": "", trips: "" }[name];
+    var owner = { "": "", env: "", accounts: "accounts", acct: "accounts", plan: "plan", month: "plan", more: "more", setup: "more", "edit-env": "more", "edit-acct": "more", reserves: "more", history: "more", import: "more", payday: "", "payday-acct": "", trips: "", inbox: "", subs: "", sub: "" }[name];
     Object.keys(tabEls).forEach(function (k) {
       if (k === "add") return;
       if (k === owner) tabEls[k].setAttribute("aria-current", "page");
@@ -2067,6 +2479,7 @@
         refresh();
         postDueBills();
         postOwnTrips();
+        processSms();
         shareEnvelopes();
         if (!current || !FORMS[current.name]) render();
       });
@@ -2089,6 +2502,7 @@
       if (last === "syncing" && S.household.state === "idle") S.householdSynced = true;
       last = S.household.state;
       postOwnTrips();
+      processSms();
       shareEnvelopes();
       if (!current || !FORMS[current.name]) render();
     });

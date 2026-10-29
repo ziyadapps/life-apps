@@ -457,3 +457,37 @@ textarea.field-input {
   cursor: pointer;
 }
 .trip details .kv { font-size: 14px; }
+
+/* ---- bank messages and subscriptions -------------------------------- */
+.sms-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.sms .select { margin: 6px 0; }
+.sms-raw summary {
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.sms-raw pre {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--ground);
+  font: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
+  direction: rtl;
+  text-align: right;
+}
+.check-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 14px;
+}
+.check-line input { width: 20px; height: 20px; }
