@@ -59,8 +59,12 @@
     return c && c.url && c.key ? c : null;
   }
 
-  function setConfig(url, key) {
-    writeJSON(CONFIG_KEY, { url: String(url).trim(), key: String(key).trim() });
+  /** extra: { name, apps } from the hub's answer to ping, so apps know who this is */
+  function setConfig(url, key, extra) {
+    var c = { url: String(url).trim(), key: String(key).trim() };
+    if (extra && extra.name) c.name = String(extra.name);
+    if (extra && extra.apps) c.apps = extra.apps;
+    writeJSON(CONFIG_KEY, c);
   }
 
   function clearConfig() {

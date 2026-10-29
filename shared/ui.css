@@ -21,7 +21,7 @@
   --bad: #b3261e;
   --radius: 12px;
   --gap: 16px;
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans Arabic", sans-serif;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Arabic", "Segoe UI", Roboto, "Noto Sans Arabic", sans-serif;
   color-scheme: light;
 }
 
@@ -219,7 +219,7 @@ textarea {
   display: inline-block;
   width: 6px;
   height: 6px;
-  margin-right: 6px;
+  margin-inline-end: 6px;
   border-radius: 50%;
   background: var(--warn);
   vertical-align: 1px;
@@ -398,4 +398,28 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .toast { transition: none; }
   .pill[data-tone="busy"] .pill-dot { animation: none; }
+}
+
+/* ---- two-way toggle (language switch and similar) --------------- */
+
+.toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.toggle button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  background: var(--surface);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.toggle button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
 }

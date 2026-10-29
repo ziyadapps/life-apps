@@ -1,0 +1,100 @@
+/*
+ * Today: a stack of cards, each answering one question, each opening the
+ * app it comes from.
+ */
+
+.today-head {
+  padding: 16px 0 6px;
+}
+
+.today-date {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.today-sub {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.card {
+  display: block;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.card-alert {
+  border-inline-start: 4px solid var(--accent);
+}
+
+.card-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.card-text {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.big {
+  display: block;
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent-text);
+}
+
+.big.neg {
+  color: var(--bad);
+}
+
+.lines .line + .line {
+  border-top: 1px solid var(--line);
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.line-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.line-title {
+  display: block;
+}
+
+.line-sub {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-value {
+  flex: none;
+  font-weight: 600;
+}
+
+.line[data-tone="warn"] .line-value { color: var(--warn); }
+.line[data-tone="good"] .line-value { color: var(--good); }
