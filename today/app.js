@@ -174,6 +174,20 @@
     main.appendChild(card("Lists", wrap, "../household/"));
   }
 
+  /* trips finished in Household that Budget has not had yet */
+  function tripsCard(main) {
+    if (!S.household) return;
+    var waiting = S.household.all("trips").filter(function (t) { return t.status === "done" && !t.budget && t.auto !== "yes"; });
+    if (!waiting.length) return;
+    var stores = {};
+    S.household.all("stores").forEach(function (s) { stores[s.id] = s.name || s.name_ar; });
+    var wrap = h("div", { class: "lines" });
+    waiting.forEach(function (t) {
+      wrap.appendChild(line((stores[t.store] || (t.kind === "paid" ? "Quick purchase" : "Shop")) + ", " + Calc.dayLabel(String(t.date).slice(0, 10)), money(t.total), t.by ? "by " + t.by : null));
+    });
+    main.appendChild(card(waiting.length === 1 ? "1 shopping trip to review" : waiting.length + " shopping trips to review", wrap, "../budget/#/trips"));
+  }
+
   /* ---------------------------------------------------------------- */
   /*  page                                                             */
   /* ---------------------------------------------------------------- */
@@ -186,6 +200,7 @@
       return;
     }
     moneyCards(main);
+    tripsCard(main);
     listCard(main);
     main.appendChild(h("p", { class: "note", style: "margin-top:18px" }, "Subscriptions and the car log will show here once they are built."));
   }

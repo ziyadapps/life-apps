@@ -378,6 +378,8 @@
     );
     var payBanner = paydayBanner();
     if (payBanner) main.appendChild(payBanner);
+    var tripBanner = tripsBanner();
+    if (tripBanner) main.appendChild(tripBanner);
     dailyCards(mo, M).forEach(function (c) {
       main.appendChild(c);
     });
@@ -1248,6 +1250,7 @@
       ["/move", "Move money", "Between envelopes or accounts"],
       ["/reserves", "Reserves and planned money", "Portfolio, other reserves, things you expect to pay or receive"],
       ["/history", "History", "Past months and their payments"],
+      ["/trips", "Shopping trips", "From Household, to post or leave out"],
       ["/setup", "Envelopes and accounts", "Names, kinds, home accounts, due days, labels"],
       ["/import", "Bring in old books", "One time, from the old budget app"],
     ];
@@ -1330,6 +1333,8 @@
     var targetDate = h("input", { class: "field-input", type: "date", value: e.target_date || "", id: "e-tdate" });
     var ends = h("input", { class: "field-input", type: "month", value: e.ends_on || "", id: "e-ends" });
     var active = select([{ value: "yes", label: "Shown" }, { value: "no", label: "Hidden" }], e.active || "yes", { id: "e-active" });
+    var inHousehold = select([{ value: "", label: "No" }, { value: "yes", label: "Yes: name, balance and spending this month" }], e.household || "", { id: "e-household" });
+    var nameAr = h("input", { class: "field-input", type: "text", dir: "rtl", value: e.name_ar || "", id: "e-name-ar", placeholder: "Optional" });
 
     main.appendChild(field("Name", name));
     if (kind) main.appendChild(field("Kind", kind));
@@ -1379,6 +1384,8 @@
       paintSplits();
     } }, "Add a fixed amount")), h("p", { class: "note" }, "For example 200 a month to Rajhi 2nd, the rest to UrPay."))));
     main.appendChild(field("Visibility", active));
+    main.appendChild(field("Show in Household", inHousehold, "Household shows this envelope's balance to everyone with a Household key. You still post the purchases."));
+    main.appendChild(field("Arabic name for Household", nameAr));
 
     var msg = errorLine();
     main.appendChild(msg);
@@ -1398,6 +1405,8 @@
         group: group.value,
         home_acct: home.value,
         active: active.value,
+        household: inHousehold.value,
+        name_ar: nameAr.value.trim(),
         on_payday: onPayday ? "yes" : "",
         due_day: k === "bill" && !onPayday && d ? Math.round(d) : null,
         daily_cap: k === "spending" ? readNumber(cap) : null,
@@ -1438,6 +1447,8 @@
     main.appendChild(field("Bank", bank, "Payday transfers are grouped by bank."));
     main.appendChild(field("Type", type));
     main.appendChild(field("Visibility", active));
+    main.appendChild(field("Show in Household", inHousehold, "Household shows this envelope's balance to everyone with a Household key. You still post the purchases."));
+    main.appendChild(field("Arabic name for Household", nameAr));
     var msg = errorLine();
     main.appendChild(msg);
     main.appendChild(h("div", { class: "save-bar" }, primary(isNew ? "Add account" : "Save account", function () {
@@ -1699,11 +1710,275 @@
   }
 
   /* ---------------------------------------------------------------- */
+  /*  Household: shared envelope balances, and trips into the books     */
+  /* ---------------------------------------------------------------- */
+
+  /*
+   * Envelopes with "Show in Household" are copied into the Household sheet
+   * (left, spent this month, the month's dates), so a household-only key
+   * sees those figures and nothing else. Written only once this device has
+   * caught up with the hub, so an old copy never overwrites a newer one.
+   */
+  var SHARE_FIELDS = ["name", "name_ar", "order", "left", "spent", "month", "month_start", "month_end", "opened"];
+
+  function shareEnvelopes() {
+    if (!S.household || !S.syncedOnce || !S.householdSynced || !hasBooks()) return;
+    var M = S.model.current;
+    var mo = S.model.byMonth[M];
+    if (!mo) return;
+    var r = Calc.range(M);
+    var now = new Date().toISOString();
+    var want = {};
+    S.model.index.envs.forEach(function (e, i) {
+      if (e.household !== "yes" || e.active === "no") return;
+      var o = mo.env[e.id] || { left: 0, spent: 0, received: 0 };
+      want[e.id] = {
+        id: e.id,
+        name: e.name,
+        name_ar: e.name_ar || "",
+        order: i + 1,
+        left: Calc.r2(o.left),
+        spent: Calc.r2(o.spent - (o.received || 0)),
+        month: M,
+        month_start: r.start,
+        month_end: r.end,
+        opened: mo.funded ? "yes" : "no",
+      };
+    });
+    var writes = [];
+    Object.keys(want).forEach(function (id) {
+      var have = S.household.get("envelopes", id);
+      var same = have && SHARE_FIELDS.every(function (k) { return String(have[k]) === String(want[id][k]); });
+      /* unchanged figures are re-dated once an hour, so "Updated" stays honest */
+      if (same && have.updated && Date.parse(now) - Date.parse(have.updated) < 3600000) return;
+      writes.push({ table: "envelopes", row: Object.assign({ updated: now }, want[id]) });
+    });
+    S.household.all("envelopes").forEach(function (row) {
+      if (!want[row.id]) writes.push({ table: "envelopes", row: { id: row.id, del: now } });
+    });
+    if (writes.length) S.household.putMany(writes);
+  }
+
+  function tripsWaiting() {
+    if (!S.household) return [];
+    return S.household
+      .all("trips")
+      .filter(function (t) {
+        return t.status === "done" && !t.budget;
+      })
+      .sort(function (a, b) {
+        return String(a.date) < String(b.date) ? -1 : 1;
+      });
+  }
+
+  function tripStore(t) {
+    var s = t.store ? S.household.get("stores", t.store) : null;
+    if (s) return s.name || s.name_ar;
+    return t.kind === "paid" ? "Quick purchase" : t.store || "Shop";
+  }
+
+  function tripNote(t, items) {
+    var bits = [tripStore(t)];
+    if (t.note) bits.push(t.note);
+    else if (items.length) bits.push(items.length + (items.length === 1 ? " item" : " items"));
+    return bits.join(", ");
+  }
+
+  function tripPayment(t, env, acct, amount, date, items) {
+    return {
+      id: "trip-" + t.id,
+      date: date,
+      env: env,
+      acct: acct || "",
+      amount: amount,
+      label: "",
+      note: tripNote(t, items),
+      kind: "spend",
+      source: "household",
+    };
+  }
+
+  /*
+   * Trips entered on a phone whose key also opens Budget (yours) post
+   * straight away, to the envelope chosen when the trip was saved. Anything
+   * that cannot post (no envelope, a closed month) waits for review instead.
+   */
+  function postOwnTrips() {
+    if (!S.household || !S.syncedOnce || !S.householdSynced || !hasBooks()) return;
+    var now = new Date().toISOString();
+    var pays = [];
+    var marks = [];
+    tripsWaiting().forEach(function (t) {
+      if (t.auto !== "yes") return;
+      var e = Calc.findEnv(S.model.index, t.env);
+      var d = String(t.date || today()).slice(0, 10);
+      if (!e || !(Calc.num(t.total) > 0) || statusOf(Calc.monthOf(d)) === "closed") return;
+      if (S.hub.get("payments", "trip-" + t.id)) return;
+      pays.push({ table: "payments", row: tripPayment(t, e.id, "", Calc.r2(Calc.num(t.total)), d, tripItems(t)) });
+      marks.push({ table: "trips", row: { id: t.id, budget: "posted", budget_ref: "trip-" + t.id, posted: now } });
+    });
+    if (!pays.length) return;
+    S.hub.putMany(pays);
+    S.household.putMany(marks);
+    refresh();
+  }
+
+  function tripsBanner() {
+    var n = tripsWaiting().filter(function (t) { return t.auto !== "yes"; }).length;
+    if (!n) return null;
+    return h(
+      "a",
+      { class: "banner", href: "#/trips", id: "trips-banner" },
+      h("span", { class: "banner-title" }, n === 1 ? "1 shopping trip to review" : n + " shopping trips to review"),
+      h("span", { class: "banner-text" }, "From Household. Check the amount and envelope, then post it or leave it out.")
+    );
+  }
+
+  /* items stay readable here after they are cleared from the list */
+  function tripItems(t) {
+    var all = S.household.tables.items || {};
+    return Object.keys(all)
+      .map(function (k) {
+        return all[k];
+      })
+      .filter(function (i) {
+        return i.trip === t.id;
+      });
+  }
+
+  /** Payments already in the books that look like this trip: same envelope and amount, within 3 days. */
+  function lookalikes(t, envId, amount) {
+    var d = String(t.date || today()).slice(0, 10);
+    return S.data.payments.filter(function (p) {
+      if (p.id === "trip-" + t.id || envOfPayment(p) !== envId) return false;
+      if (Math.abs(Calc.num(p.amount) - amount) > 0.01) return false;
+      return Math.abs(Calc.daysBetween(Calc.dateOf(p), d)) <= 3;
+    });
+  }
+
+  function productName(i) {
+    var p = S.household.get("products", i.product);
+    var name = p ? p.name || p.name_ar : i.name;
+    return name + (i.size ? " " + i.size : "");
+  }
+
+  function tripCard(t) {
+    var items = tripItems(t);
+    var list = t.list ? S.household.get("lists", t.list) : null;
+    var guess = Calc.findEnv(S.model.index, t.env || (list && (list.env || list.budget_env)) || "Groceries");
+    var date = h("input", { class: "field-input", type: "date", value: String(t.date || today()).slice(0, 10), "aria-label": "Date" });
+    var amount = numberInput(Calc.num(t.total) ? Calc.num(t.total).toFixed(2) : "", { "aria-label": "Amount", class: "field-input trip-amount" });
+    var envSel = select(envOptions(true, "Choose an envelope"), guess ? guess.id : "", { "aria-label": "Envelope", class: "select trip-env" });
+    var acctSel = select(acctOptions(true, "The envelope's own account"), "", { "aria-label": "Account" });
+    var warn = h("p", { class: "note trip-dup", role: "status" });
+    function checkDup() {
+      var n = readNumber(amount);
+      var same = n && envSel.value ? lookalikes(t, envSel.value, n) : [];
+      warn.textContent = same.length
+        ? "Already in Budget? " + same.map(function (p) { return money(p.amount) + " on " + Calc.dayLabel(Calc.dateOf(p)) + (p.note ? " (" + p.note + ")" : ""); }).join("; ") + ". Leave this out if it is the same purchase."
+        : "";
+      warn.hidden = !same.length;
+    }
+    amount.addEventListener("input", checkDup);
+    envSel.addEventListener("change", checkDup);
+    checkDup();
+    var msg = errorLine();
+    var who = t.by ? ", by " + t.by : "";
+    var lines = items.map(function (i) {
+      return h("div", { class: "kv" }, h("span", null, productName(i) + " (" + Calc.num(i.qty) + " " + (i.unit || "") + ")"), h("span", null, Calc.num(i.price) > 0 ? money(i.price) : "no price"));
+    });
+    var diff = Calc.r2(Calc.num(t.total) - Calc.num(t.items_total));
+    return h(
+      "section",
+      { class: "section trip", "data-trip": t.id },
+      h("h2", { class: "section-title" }, tripStore(t) + ", " + Calc.dayLabel(String(t.date).slice(0, 10)) + who),
+      h(
+        "div",
+        { class: "card-pad" },
+        t.note ? h("p", { class: "note", style: "margin-top:0" }, t.note) : null,
+        items.length
+          ? h("details", null, h("summary", null, items.length + (items.length === 1 ? " item" : " items") + ", priced " + money(t.items_total) + (diff ? ", receipt " + money(t.total) : "")), h("div", { style: "margin-top:6px" }, lines))
+          : null,
+        h("div", { class: "two" }, field("Amount", amount), field("Date", date)),
+        field("Envelope", envSel),
+        field("Account", acctSel),
+        warn,
+        msg,
+        h(
+          "div",
+          { class: "btn-row" },
+          h("button", { class: "btn btn-primary", type: "button", onclick: function () {
+            var n = readNumber(amount);
+            if (n === null || isNaN(n) || n <= 0) { msg.textContent = "Type the amount, more than 0."; return; }
+            if (!envSel.value) { msg.textContent = "Choose an envelope."; return; }
+            var d = date.value || today();
+            if (statusOf(Calc.monthOf(d)) === "closed") { msg.textContent = Calc.monthLabel(Calc.monthOf(d)) + " is closed. Change the date."; return; }
+            S.hub.put("payments", tripPayment(t, envSel.value, acctSel.value, n, d, items));
+            S.household.put("trips", { id: t.id, env: envSel.value, budget: "posted", budget_ref: "trip-" + t.id, posted: new Date().toISOString() });
+            Kit.toast("Posted " + money(n) + " from " + envName(envSel.value));
+            render();
+          } }, "Post to Budget"),
+          Kit.confirmButton("Leave out", "Tap again to leave out", function () {
+            S.household.put("trips", { id: t.id, budget: "skipped" });
+            render();
+          })
+        )
+      )
+    );
+  }
+
+  function viewTrips(main) {
+    main.appendChild(back("Back", "/"));
+    main.appendChild(h("div", null, title("Shopping trips", "From Household. Hers wait here for review; yours post by themselves.")));
+    if (!S.household) {
+      main.appendChild(h("p", { class: "empty" }, "This device's key does not open Household."));
+      return;
+    }
+    var waiting = tripsWaiting();
+    if (!waiting.length) main.appendChild(h("div", { class: "list" }, h("div", { class: "empty" }, "Nothing to review.")));
+    waiting.forEach(function (t) {
+      main.appendChild(tripCard(t));
+    });
+    var recent = S.household
+      .all("trips")
+      .filter(function (t) {
+        return t.budget === "posted" || t.budget === "skipped";
+      })
+      .sort(function (a, b) {
+        return String(b.date) < String(a.date) ? -1 : 1;
+      })
+      .slice(0, 20);
+    if (!recent.length) return;
+    var list = h("div", { class: "list", id: "trips-done" });
+    recent.forEach(function (t) {
+      var pay = t.budget === "posted" ? S.hub.get("payments", t.budget_ref) : null;
+      var sub = t.budget === "posted" ? (pay ? envName(pay.env) + ", " + money(pay.amount) + (t.auto === "yes" ? ", posted by itself" : "") : "Payment deleted in Budget") : "Left out";
+      list.appendChild(
+        h(
+          "div",
+          { class: "row", "data-trip": t.id },
+          h("div", { class: "row-main" }, h("span", { class: "row-title" }, tripStore(t) + ", " + Calc.dayLabel(String(t.date).slice(0, 10)) + (t.by ? ", " + t.by : "")), h("span", { class: "row-sub" }, sub)),
+          Kit.confirmButton("Undo", "Tap again", function () {
+            if (pay) {
+              if (statusOf(Calc.monthOf(Calc.dateOf(pay))) === "closed") { Kit.toast("That month is closed."); return; }
+              S.hub.remove("payments", pay.id);
+            }
+            /* an undone trip waits for review, even one that posted by itself */
+            S.household.put("trips", { id: t.id, budget: "", budget_ref: "", posted: "", auto: "" });
+            render();
+          }, "btn btn-quiet")
+        )
+      );
+    });
+    main.appendChild(section("Done", list));
+  }
+
+  /* ---------------------------------------------------------------- */
   /*  routing                                                          */
   /* ---------------------------------------------------------------- */
 
   /* screens with inputs are not redrawn when a sync lands, so typing is never lost */
-  var FORMS = { add: 1, move: 1, payday: 1, "payday-acct": 1, plan: 1, month: 1, "edit-env": 1, "edit-acct": 1, reserves: 1, import: 1, env: 1, acct: 1, setup: 1 };
+  var FORMS = { add: 1, move: 1, payday: 1, "payday-acct": 1, plan: 1, month: 1, "edit-env": 1, "edit-acct": 1, reserves: 1, import: 1, env: 1, acct: 1, setup: 1, trips: 1 };
 
   function parseRoute() {
     var raw = (location.hash || "#/").slice(1);
@@ -1745,6 +2020,7 @@
       case "reserves": viewReserves(main); break;
       case "history": a[0] ? viewHistoryMonth(main, a[0]) : viewHistory(main); break;
       case "import": viewImport(main); break;
+      case "trips": viewTrips(main); break;
       default: viewMissing(main);
     }
     paintTabs(r.name);
@@ -1767,7 +2043,7 @@
   }
 
   function paintTabs(name) {
-    var owner = { "": "", env: "", accounts: "accounts", acct: "accounts", plan: "plan", month: "plan", more: "more", setup: "more", "edit-env": "more", "edit-acct": "more", reserves: "more", history: "more", import: "more", payday: "", "payday-acct": "" }[name];
+    var owner = { "": "", env: "", accounts: "accounts", acct: "accounts", plan: "plan", month: "plan", more: "more", setup: "more", "edit-env": "more", "edit-acct": "more", reserves: "more", history: "more", import: "more", payday: "", "payday-acct": "", trips: "" }[name];
     Object.keys(tabEls).forEach(function (k) {
       if (k === "add") return;
       if (k === owner) tabEls[k].setAttribute("aria-current", "page");
@@ -1790,10 +2066,32 @@
         lastState = hub.state;
         refresh();
         postDueBills();
+        postOwnTrips();
+        shareEnvelopes();
         if (!current || !FORMS[current.name]) render();
       });
+      startHousehold();
       window.addEventListener("hashchange", render);
       render();
     },
+    onWho: function () {
+      startHousehold();
+      if (!current || !FORMS[current.name]) render();
+    },
   });
+
+  /* Household's trips wait here for review, on keys that open both apps */
+  function startHousehold() {
+    if (S.household || !Kit.canUse("household")) return;
+    S.household = new Hub("household");
+    var last = S.household.state;
+    S.household.on(function () {
+      if (last === "syncing" && S.household.state === "idle") S.householdSynced = true;
+      last = S.household.state;
+      postOwnTrips();
+      shareEnvelopes();
+      if (!current || !FORMS[current.name]) render();
+    });
+    S.household.start();
+  }
 })();

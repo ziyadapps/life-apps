@@ -442,3 +442,18 @@ textarea.field-input {
   min-height: 120px;
   font: 13px/1.4 ui-monospace, Menlo, monospace;
 }
+
+/* ---- shopping trips from Household ---------------------------------- */
+.card-pad {
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.trip summary {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.trip details .kv { font-size: 14px; }

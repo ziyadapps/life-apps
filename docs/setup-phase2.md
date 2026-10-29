@@ -93,7 +93,7 @@ The same pattern as Add Test Line, with your **Shortcuts** key:
 | Text | table | `items` |
 | Dictionary | row | (below) |
 
-   Inside **row**: `list` = `groceries`, `name` = the **Ask for Input** variable, `by` = `Siri`.
+   Inside **row**: `list` = `groceries`, `name` = the **Ask for Input** variable, `by` = `Siri`. Household gives it a section and a unit the next time it opens.
 
 4. **Show Content**.
 
@@ -101,13 +101,7 @@ The same pattern as Add Test Line, with your **Shortcuts** key:
 
 ## How the lists work
 
-- **Add:** type in the box at the bottom and press Add. Names used before on that list are suggested as you type.
-- **Bought:** tap the circle. The item moves to **Bought** with a line through it. Tap the circle again to put it back.
-- **Already on the list:** adding something that is already there just tells you so. Adding something that was bought puts it back on the list.
-- **Edit:** tap the item's name to change it, add a quantity or a note, move it to another list, or delete it.
-- **Clear bought:** two taps, and the bought items are gone from both phones.
-- **Who:** other people's items say who added or bought them. Your own carry no label.
-- **Receipt to Budget** (your phone only): after shopping, press it, type the total, and it lands in that envelope in Budget. It remembers the envelope per list.
+See `setup-household-v2.md`: Household was rebuilt with a catalogue, brands and sizes, prices per store, envelope balances from Budget, and trips into Budget.
 
 ## Today
 
