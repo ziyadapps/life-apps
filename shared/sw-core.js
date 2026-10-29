@@ -9,8 +9,9 @@
  *   importScripts("../shared/sw-core.js");
  *
  * The app's own files are kept on the device and served from there at once;
- * a fresh copy is fetched in the background for next time. So after you
- * publish a change, it shows up the second time you open the app.
+ * a fresh copy is fetched in the background for next time, always asking
+ * GitHub rather than the browser's short-term copy. So after you publish a
+ * change, it shows up the second time you open the app.
  * Requests to the hub are never touched: data always goes straight through.
  */
 (function () {
@@ -24,7 +25,13 @@
       caches
         .open(CACHE)
         .then(function (cache) {
-          return cache.addAll(self.SHELL_FILES);
+          /* "reload" skips the browser's own short-term copy, so a new
+             version never stores files from before the update */
+          return cache.addAll(
+            self.SHELL_FILES.map(function (f) {
+              return new Request(f, { cache: "reload" });
+            })
+          );
         })
         .then(function () {
           return self.skipWaiting();
@@ -61,7 +68,7 @@
     event.respondWith(
       caches.open(CACHE).then(function (cache) {
         return cache.match(req, { ignoreSearch: true }).then(function (cached) {
-          var fresh = fetch(req)
+          var fresh = fetch(req, { cache: "no-cache" })
             .then(function (res) {
               if (res && res.ok) cache.put(req, res.clone());
               return res;

@@ -163,10 +163,17 @@
     return h("div", { class: "kv" }, h("span", null, label), h("span", null, value));
   }
 
+  /*
+   * A labelled control. Only a single input, select or textarea goes inside a
+   * <label>: on iPhone, a tap anywhere in a label also "clicks" the first
+   * control in it, so a group of buttons (envelope or label chips) must sit in
+   * a plain group instead, or every tap lands on the first button.
+   */
   function field(label, input, hint) {
+    var single = input && /^(INPUT|SELECT|TEXTAREA)$/.test(input.tagName);
     return h(
-      "label",
-      { class: "field" },
+      single ? "label" : "div",
+      single ? { class: "field" } : { class: "field", role: "group", "aria-label": label },
       h("span", { class: "field-label" }, label),
       input,
       hint ? h("span", { class: "note" }, hint) : null
@@ -303,6 +310,8 @@
       else if (!o.budget) sub = "Nothing due this month";
       else if (Calc.billDate(M, e) && mo.funded) sub = (e.on_payday === "yes" ? "Due on payday, " : "Due ") + Calc.dayLabel(Calc.billDate(M, e));
       else sub = "Budget " + money(o.budget);
+    } else if (e.kind === "remaining") {
+      sub = "Not set aside for anything";
     } else if (e.kind === "fund") {
       var target = Calc.num(e.target);
       sub = target ? money(o.left) + " of " + money(target) : "Saved " + money(o.left);
@@ -358,7 +367,6 @@
     var mo = S.model.byMonth[M];
     var r = Calc.range(M);
     var daysLeft = Calc.daysBetween(today(), r.end) + 1;
-    var rem = mo && S.model.index.remaining ? mo.env[S.model.index.remaining].left : 0;
 
     main.appendChild(
       h(
@@ -366,14 +374,6 @@
         { class: "month-head" },
         h("h2", { class: "month-name" }, Calc.monthLabel(M)),
         h("span", { class: "month-range" }, Calc.dayLabel(r.start) + " to " + Calc.dayLabel(r.end) + ", " + daysLeft + (daysLeft === 1 ? " day" : " days") + " to payday")
-      )
-    );
-    main.appendChild(
-      h(
-        "a",
-        { class: "hero", href: S.model.index.remaining ? "#/env/" + S.model.index.remaining : "#/", style: "display:block;color:inherit;text-decoration:none" },
-        h("span", { class: "hero-value" + (rem < 0 ? " neg" : "") }, money(rem), h("span", { class: "cur" }, "SAR")),
-        h("span", { class: "hero-label" }, "Remaining: not set aside for anything this month")
       )
     );
     var payBanner = paydayBanner();
@@ -411,6 +411,7 @@
         var eg = GROUPS.indexOf(e.group) >= 0 ? e.group : "Other";
         return eg === g;
       });
+      if (g === "Funds" && S.model.index.remaining) envs.push(env(S.model.index.remaining));
       if (!envs.length) return;
       var list = h("div", { class: "list" });
       envs.forEach(function (e) {
