@@ -4,10 +4,11 @@ Personal home-screen apps that share one Google Apps Script hub.
 
 | Folder | What it is |
 |---|---|
-| `hub/` | `Code.gs`, the hub script. It lives inside the "Life apps hub" Google Sheet. No secrets in it. |
+| `hub/` | `Code.gs`, the hub script (keys: full, add-only, and family "suggest" keys). It lives inside the "Life apps hub" Google Sheet. No secrets in it. |
 | `shared/` | Code every app uses: `hub.js` (offline-first sync), `kit.js` (unlock, status, helpers), `ui.css` (the look), `sw-core.js` (opening with no signal). |
 | `budget/` | Budget v2: `calc.js` (all the arithmetic, including subscriptions posting on their own day), `sms.js` (reads bank SMS and decides what each one means), `app.js` (screens), `migrate.js` and `v1-ledger.js` (one-time import from the old app). |
 | `household/` | Household v2: `catalog.js` (starting catalogue: items, sizes, brands), `data.js` (search, sizes and measures, prices by brand and size, running out, envelope balances), `app.js` (screens), `vendor/zxing.min.js` (barcode reader, Apache 2.0, loaded only when scanning). Shared lists, prices per store, envelopes shared from Budget, trips into Budget. English or Arabic. |
+| `family/` | Family tree, shared with the family: `tree.js` (levels, Arabic kinship, anchored search, the check against the poster, linking hints, suggestions), `app.js` (screens, Arabic). Family members' keys read and suggest; the owner edits and approves. No family data in the repo. |
 | `today/` | Today: payday, allowance, bills this week and open lists on one screen. Reads Budget and Household. |
 | `test/` | Hub test, the smallest app, used to prove the hub works. |
 | `docs/` | Setup guides. |

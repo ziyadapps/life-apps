@@ -25,7 +25,7 @@
 
 /* Bump this whenever you paste in a new copy. Apps read it back from the
    published address, which proves the address serves the code you saved. */
-const VERSION = "2026-10-28b";
+const VERSION = "2026-11-01a";
 
 const TZ = "Asia/Riyadh";
 const APPS_FOLDER = "Life apps";
@@ -94,6 +94,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("Life apps")
     .addItem("New key...", "menuNewKey")
+    .addItem("New family member key...", "menuNewFamilyKey")
     .addItem("Add an app...", "menuAddApp")
     .addSeparator()
     .addItem("Run the check", "menuHealth")
@@ -118,8 +119,11 @@ function doPost(e) {
     const action = String(req.action || "");
     if (action === "ping") return reply_(ping_(key));
     if (action === "add") return reply_(add_(key, req));
+    /* a family member's key reads its app and writes only suggestions */
+    if (key.mode === "suggest" && action === "pull") return reply_(pull_(key, req));
+    if (key.mode === "suggest" && action === "push") return reply_(pushSuggestions_(key, req));
     if (key.mode !== "full") {
-      throw fail_("This key can only add rows.");
+      throw fail_(key.mode === "suggest" ? "This key can read and send suggestions only." : "This key can only add rows.");
     }
     if (action === "pull") return reply_(pull_(key, req));
     if (action === "push") return reply_(push_(key, req));
@@ -165,7 +169,7 @@ function auth_(req) {
     touchKey_(t.sheet, i + 2, r);
     return {
       name: r.name,
-      mode: r.mode === "add" ? "add" : "full",
+      mode: r.mode === "add" ? "add" : r.mode === "suggest" ? "suggest" : "full",
       apps: String(r.apps || "*")
         .split(",")
         .map(function (s) {
@@ -210,7 +214,7 @@ function createKey_(name, apps, mode) {
   const row = HUB_TABS.Keys.map(function (c) {
     if (c === "name") return name;
     if (c === "apps") return String(apps || "*").trim() || "*";
-    if (c === "mode") return mode === "add" ? "add" : "full";
+    if (c === "mode") return mode === "add" || mode === "suggest" ? mode : "full";
     if (c === "active") return "yes";
     if (c === "created") return stamp_(new Date());
     if (c === "hash") return sha256_(key);
@@ -269,6 +273,27 @@ function menuNewKey() {
  * Gives an app its own sheet in the Life apps folder. Tabs inside it are made
  * the first time the app writes to a table, so nothing else is needed here.
  */
+/**
+ * A key for a family member: it opens only the family app, reads it, and
+ * can send suggestions, which change nothing until you accept them.
+ */
+function menuNewFamilyKey() {
+  const ui = SpreadsheetApp.getUi();
+  const a = ui.prompt("New family member key", "Whose key is it? The name shows next to their suggestions, for example: أبوي, سلمان.", ui.ButtonSet.OK_CANCEL);
+  if (a.getSelectedButton() !== ui.Button.OK) return;
+  const key = createKey_(a.getResponseText(), "family", "suggest");
+  const html = HtmlService.createHtmlOutput(
+    '<div style="font:14px Arial,sans-serif">' +
+      "<p>Copy this key now. It is shown only once.</p>" +
+      '<input id="k" readonly value="' + key + '" style="width:100%;font:13px monospace;padding:8px" onclick="this.select()">' +
+      '<p><button onclick="var k=document.getElementById(\'k\');k.select();document.execCommand(\'copy\');this.textContent=\'Copied\'">Copy</button></p>' +
+      "<p>It reads the family app and sends suggestions only. To turn it off later, type <b>no</b> in its <b>active</b> cell on the Keys tab.</p></div>"
+  )
+    .setWidth(460)
+    .setHeight(230);
+  ui.showModalDialog(html, "Family member key");
+}
+
 function registerApp_(app) {
   app = String(app || "").trim().toLowerCase();
   if (!/^[a-z][a-z0-9-]{1,23}$/.test(app)) {
@@ -390,6 +415,46 @@ function push_(key, req) {
     throw fail_("Send at most " + MAX_ROWS_PER_PUSH + " rows at a time.");
   }
   const res = writeRows_(app, items, false);
+  return { ok: true, app: app, ts: res.ts, written: res.written };
+}
+
+/**
+ * A family member's push: rows of the suggestions table only, always under
+ * their own name, never someone else's suggestion, and never accepted or
+ * rejected by themselves.
+ */
+function pushSuggestions_(key, req) {
+  const app = appName_(req);
+  allowedApp_(key, app);
+  const items = Array.isArray(req.rows) ? req.rows : [];
+  if (items.length > MAX_ROWS_PER_PUSH) throw fail_("Send at most " + MAX_ROWS_PER_PUSH + " rows at a time.");
+  const owner = {};
+  const sh = appSheet_(app).getSheetByName("suggestions");
+  if (sh) {
+    readTable_(sh).rows.forEach(function (r) {
+      owner[r.id] = { by: r.by, status: r.status };
+    });
+  }
+  const clean = items.map(function (it) {
+    if (!it || it.table !== "suggestions" || !it.row || typeof it.row !== "object") {
+      throw fail_("This key can send suggestions only.");
+    }
+    const row = {};
+    Object.keys(it.row).forEach(function (k) {
+      row[k] = it.row[k];
+    });
+    const had = owner[String(row.id || "")];
+    if (had && had.by !== key.name) throw fail_("This suggestion belongs to someone else.");
+    if (had && had.status && had.status !== "pending") throw fail_("This suggestion was already decided.");
+    if (row.status !== undefined && row.status !== "pending" && row.status !== "withdrawn") {
+      throw fail_("Only the owner of the app can accept or reject suggestions.");
+    }
+    delete row.decided;
+    delete row.reply;
+    row.by = key.name;
+    return { table: "suggestions", row: row };
+  });
+  const res = writeRows_(app, clean, false);
   return { ok: true, app: app, ts: res.ts, written: res.written };
 }
 

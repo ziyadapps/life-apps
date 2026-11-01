@@ -294,11 +294,12 @@
           btn.textContent = t("checking");
           global.Hub.call({ url: u, key: k }, { action: "ping" })
             .then(function (res) {
-              if (res.mode !== "full") throw new Error(t("addOnly"));
+              /* a family member's key (suggest) opens only apps built for it */
+              if (res.mode === "add" || (res.mode === "suggest" && !opts.suggestKeys)) throw new Error(t("addOnly"));
               if (res.apps.indexOf("*") < 0 && res.apps.indexOf(opts.app) < 0) {
                 throw new Error(t("notAllowed", { app: titleOf(opts) }));
               }
-              global.Hub.setConfig(u, k, { name: res.key, apps: res.apps });
+              global.Hub.setConfig(u, k, { name: res.key, apps: res.apps, mode: res.mode });
               global.location.replace(global.location.pathname); // drops the key from the address
             })
             .catch(function (err) {
@@ -381,7 +382,7 @@
    */
   function who() {
     var c = global.Hub.config();
-    return c ? { name: c.name || "", apps: c.apps || null } : { name: "", apps: null };
+    return c ? { name: c.name || "", apps: c.apps || null, mode: c.mode || "" } : { name: "", apps: null, mode: "" };
   }
 
   function canUse(app) {
@@ -395,9 +396,9 @@
     if (!c) return;
     global.Hub.call(c, { action: "ping" })
       .then(function (res) {
-        var same = c.name === res.key && JSON.stringify(c.apps || null) === JSON.stringify(res.apps);
+        var same = c.name === res.key && JSON.stringify(c.apps || null) === JSON.stringify(res.apps) && (c.mode || "") === (res.mode || "");
         if (same) return;
-        global.Hub.setConfig(c.url, c.key, { name: res.key, apps: res.apps });
+        global.Hub.setConfig(c.url, c.key, { name: res.key, apps: res.apps, mode: res.mode });
         if (onDone) onDone();
       })
       .catch(function () {});
