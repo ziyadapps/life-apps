@@ -1,5 +1,5 @@
 self.SHELL_APP = "today";
-self.SHELL_VERSION = "5"; // bump this when any file below changes
+self.SHELL_VERSION = "6"; // bump this when any file below changes
 self.SHELL_FILES = [
   "./",
   "./today.css",
@@ -9,6 +9,7 @@ self.SHELL_FILES = [
   "./icon-192.png",
   "../budget/calc.js",
   "../car/calc.js",
+  "../watchlist/data.js",
   "../shared/ui.css",
   "../shared/hub.js",
   "../shared/kit.js",

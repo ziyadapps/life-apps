@@ -25,7 +25,7 @@
 
 /* Bump this whenever you paste in a new copy. Apps read it back from the
    published address, which proves the address serves the code you saved. */
-const VERSION = "2026-11-01a";
+const VERSION = "2026-11-02a";
 
 const TZ = "Asia/Riyadh";
 const APPS_FOLDER = "Life apps";
@@ -96,6 +96,7 @@ function onOpen() {
     .addItem("New key...", "menuNewKey")
     .addItem("New family member key...", "menuNewFamilyKey")
     .addItem("Add an app...", "menuAddApp")
+    .addItem("Emby login for Watchlist...", "menuEmby")
     .addSeparator()
     .addItem("Run the check", "menuHealth")
     .addItem("Back up now", "dailyBackup")
@@ -128,6 +129,10 @@ function doPost(e) {
     if (action === "pull") return reply_(pull_(key, req));
     if (action === "push") return reply_(push_(key, req));
     if (action === "health") return reply_(health_());
+    if (action === "emby") {
+      allowedApp_(key, "watchlist");
+      return reply_(emby_(req));
+    }
     throw fail_("The hub does not know the action \"" + action + "\".");
   } catch (err) {
     return reply_({ ok: false, error: String((err && err.message) || err) });
@@ -904,3 +909,172 @@ function sha256_(s) {
     })
     .join("");
 }
+
+/* ------------------------------------------------------------------ */
+/*  Emby, for the Watchlist                                           */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The Watchlist asks the hub whether a title is on your Emby server. The
+ * server's address and your login live in this script's properties (set
+ * from the menu), never in a sheet or on a phone. The hub signs in like the
+ * Emby app does and keeps the session it gets back.
+ */
+const EMBY_CLIENT = 'Emby Client="Life apps", Device="Hub", DeviceId="lifeapps-hub", Version="1.0.0"';
+
+function menuEmby() {
+  const ui = SpreadsheetApp.getUi();
+  const a = ui.prompt("Emby: server address", "Like https://050.example.com (with the port only if it is not 443).", ui.ButtonSet.OK_CANCEL);
+  if (a.getSelectedButton() !== ui.Button.OK) return;
+  const b = ui.prompt("Emby: username", "", ui.ButtonSet.OK_CANCEL);
+  if (b.getSelectedButton() !== ui.Button.OK) return;
+  const c = ui.prompt("Emby: password", "", ui.ButtonSet.OK_CANCEL);
+  if (c.getSelectedButton() !== ui.Button.OK) return;
+  setEmbyLogin_(a.getResponseText(), b.getResponseText(), c.getResponseText());
+  let msg;
+  try {
+    const st = emby_({ op: "status" });
+    msg = "Signed in to " + (st.server || "Emby") + ". The Watchlist can use it now.";
+  } catch (err) {
+    msg = "Saved, but signing in failed: " + err.message;
+  }
+  ui.alert("Emby", msg, ui.ButtonSet.OK);
+}
+
+function setEmbyLogin_(url, user, pass) {
+  const p = PropertiesService.getScriptProperties();
+  p.setProperty("EMBY_URL", String(url || "").trim().replace(/\/+$/, "").replace(/\/emby$/i, ""));
+  p.setProperty("EMBY_USER", String(user || "").trim());
+  p.setProperty("EMBY_PASS", String(pass || ""));
+  p.setProperty("EMBY_TOKEN", "");
+  p.setProperty("EMBY_UID", "");
+}
+
+function embyConf_() {
+  const p = PropertiesService.getScriptProperties();
+  const url = p.getProperty("EMBY_URL");
+  if (!url) throw fail_("Emby is not set up. In the hub sheet: Life apps, Emby login for Watchlist.");
+  return { p: p, url: url, user: p.getProperty("EMBY_USER") || "", pass: p.getProperty("EMBY_PASS") || "", token: p.getProperty("EMBY_TOKEN") || "", uid: p.getProperty("EMBY_UID") || "" };
+}
+
+function embyLogin_(c) {
+  const res = UrlFetchApp.fetch(c.url + "/emby/Users/AuthenticateByName", {
+    method: "post",
+    contentType: "application/json",
+    headers: { "X-Emby-Authorization": EMBY_CLIENT },
+    payload: JSON.stringify({ Username: c.user, Pw: c.pass }),
+    muteHttpExceptions: true,
+  });
+  const code = res.getResponseCode();
+  if (code === 401) throw fail_("Emby refused the username or password.");
+  if (code !== 200) throw fail_("Emby answered " + code + " when signing in.");
+  const data = JSON.parse(res.getContentText());
+  c.token = data.AccessToken;
+  c.uid = data.User && data.User.Id;
+  c.p.setProperty("EMBY_TOKEN", c.token);
+  c.p.setProperty("EMBY_UID", c.uid);
+  return c;
+}
+
+function embyQuery_(path, params) {
+  return Object.keys(params || {})
+    .filter(function (k) { return params[k] !== undefined && params[k] !== null && params[k] !== ""; })
+    .map(function (k) { return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]); })
+    .join("&");
+}
+
+/** Several GETs at once, signing in again once if the session has expired. */
+function embyGetAll_(c, requests) {
+  function build() {
+    return requests.map(function (r) {
+      const path = r.path.replace("{uid}", c.uid);
+      return { url: c.url + path + "?" + embyQuery_(path, r.params), method: "get", headers: { "X-Emby-Token": c.token, "X-Emby-Authorization": EMBY_CLIENT }, muteHttpExceptions: true };
+    });
+  }
+  if (!c.token || !c.uid) embyLogin_(c);
+  let out = UrlFetchApp.fetchAll(build());
+  if (out.some(function (r) { return r.getResponseCode() === 401; })) {
+    embyLogin_(c);
+    out = UrlFetchApp.fetchAll(build());
+  }
+  return out.map(function (r) {
+    if (r.getResponseCode() !== 200) throw fail_("Emby answered " + r.getResponseCode() + ".");
+    return JSON.parse(r.getContentText());
+  });
+}
+
+const EMBY_FIELDS = "ProviderIds,ProductionYear,ChildCount,RecursiveItemCount,DateCreated,PremiereDate";
+
+function bareName_(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, "");
+}
+
+function embyItem_(it) {
+  const ids = {};
+  Object.keys(it.ProviderIds || {}).forEach(function (k) { ids[k.toLowerCase()] = String(it.ProviderIds[k]); });
+  return {
+    name: it.Name,
+    year: it.ProductionYear || "",
+    type: it.Type === "Series" ? "tv" : "movie",
+    tmdb: ids.tmdb || "",
+    imdb: ids.imdb || "",
+    seasons: it.Type === "Series" ? it.ChildCount || 0 : "",
+    episodes: it.Type === "Series" ? it.RecursiveItemCount || 0 : "",
+    added: it.DateCreated ? String(it.DateCreated).slice(0, 10) : "",
+  };
+}
+
+/**
+ * op status: signs in, returns the server's name.
+ * op find:   items [{ key, kind (movie|tv), tmdb, imdb, title, year }] (up to 30):
+ *            returns { found: { key: { seasons, episodes, added, name } } } for those on the server.
+ *            Matched by TMDB or IMDb id first, then by name and year.
+ * op latest: kind movie|tv, limit: the newest on the server, with their ids.
+ */
+function emby_(req) {
+  const c = embyConf_();
+  const op = String(req.op || "");
+  if (op === "status") {
+    if (!c.token || !c.uid) embyLogin_(c);
+    const info = embyGetAll_(c, [{ path: "/emby/System/Info", params: {} }])[0];
+    return { ok: true, server: info.ServerName || "", version: info.Version || "" };
+  }
+  if (op === "find") {
+    const items = (req.items || []).slice(0, 30);
+    if (!items.length) return { ok: true, found: {} };
+    const any = [];
+    items.forEach(function (i) {
+      if (i.tmdb) any.push("tmdb." + i.tmdb);
+      if (i.imdb) any.push("imdb." + i.imdb);
+    });
+    const requests = [{ path: "/emby/Users/{uid}/Items", params: { Recursive: "true", IncludeItemTypes: "Movie,Series", AnyProviderIdEquals: any.join(","), Fields: EMBY_FIELDS, Limit: 200 } }];
+    items.forEach(function (i) {
+      requests.push({ path: "/emby/Users/{uid}/Items", params: { Recursive: "true", IncludeItemTypes: i.kind === "tv" ? "Series" : "Movie", SearchTerm: i.title, Fields: EMBY_FIELDS, Limit: 8 } });
+    });
+    const res = embyGetAll_(c, requests);
+    const byId = (res[0].Items || []).map(embyItem_);
+    const found = {};
+    items.forEach(function (i, n) {
+      const kind = i.kind === "tv" ? "tv" : "movie";
+      let hit = byId.filter(function (e) { return e.type === kind && ((i.tmdb && e.tmdb === String(i.tmdb)) || (i.imdb && e.imdb === String(i.imdb))); })[0];
+      if (!hit) {
+        const named = (res[n + 1].Items || []).map(embyItem_);
+        hit = named.filter(function (e) { return (i.tmdb && e.tmdb === String(i.tmdb)) || (i.imdb && e.imdb === String(i.imdb)); })[0];
+        if (!hit) {
+          hit = named.filter(function (e) {
+            return !e.tmdb && bareName_(e.name) === bareName_(i.title) && (!i.year || !e.year || Math.abs(Number(e.year) - Number(i.year)) <= 1);
+          })[0];
+        }
+      }
+      if (hit) found[i.key] = { name: hit.name, seasons: hit.seasons, episodes: hit.episodes, added: hit.added };
+    });
+    return { ok: true, found: found };
+  }
+  if (op === "latest") {
+    const tv = req.kind === "tv";
+    const res = embyGetAll_(c, [{ path: "/emby/Users/{uid}/Items", params: { Recursive: "true", IncludeItemTypes: tv ? "Series" : "Movie", SortBy: tv ? "DateLastContentAdded" : "DateCreated", SortOrder: "Descending", Fields: EMBY_FIELDS, Limit: Math.min(Number(req.limit) || 30, 60) } }])[0];
+    return { ok: true, items: (res.Items || []).map(embyItem_) };
+  }
+  throw fail_("Emby: unknown request.");
+}
+

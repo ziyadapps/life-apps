@@ -205,6 +205,23 @@
     main.appendChild(card("Car", wrap, "../car/"));
   }
 
+  /* new episodes of what you watch, and what just arrived on Emby */
+  function watchCard(main) {
+    if (!S.watch || !window.WatchData) return;
+    var alerts = WatchData.alerts(S.watch.all("items"), today());
+    if (!alerts.length) return;
+    var wrap = h("div", { class: "lines" });
+    alerts.slice(0, 6).forEach(function (a) { wrap.appendChild(line(a.text, null, a.sub)); });
+    main.appendChild(card("To watch", wrap, "../watchlist/"));
+  }
+
+  function startWatch() {
+    if (S.watch || !Kit.canUse("watchlist")) return;
+    S.watch = new Hub("watchlist");
+    S.watch.on(render);
+    S.watch.start();
+  }
+
   function startCar() {
     if (S.car || !Kit.canUse("car")) return;
     S.car = new Hub("car");
@@ -227,6 +244,7 @@
     tripsCard(main);
     listCard(main);
     carCard(main);
+    watchCard(main);
   }
 
   Kit.start({
@@ -242,6 +260,7 @@
         S.household.start();
       }
       startCar();
+      startWatch();
       render();
       /* a new day, or a return to the app, redraws */
       document.addEventListener("visibilitychange", function () {
@@ -255,6 +274,7 @@
         S.household.start();
       }
       startCar();
+      startWatch();
       render();
     },
   });
