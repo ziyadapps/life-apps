@@ -2,12 +2,14 @@
  * Family tree: the logic, with no screens, so it can be tested on its own.
  *
  * Tables in the "Life apps: family" sheet:
- *   people       name, gen, father, mother, family, gender (m/f), alive (yes/no), born, died,
+ *   people       name, gen, father, mother (one of the father's marriages), family,
+ *                gender (m/f), alive (yes/no), born, died,
  *                known (kunya or nickname), place, about, flagged, x, y, order
  *                gen  = the level printed on the poster (kept as printed)
  *                x, y = where the name sits on the poster, for "who is near" hints
  *   families     name, primary, note
- *   marriages    a, b, note                       (a husband and wife, any families)
+ *   marriages    a, b, name, family, note         (a = the husband; b = the wife when she is
+ *                                                  in the tree, otherwise her name and family as text)
  *   notes        person, text, by, date           (what people know about someone)
  *   suggestions  by, kind (edit, add, note, marriage), target, changes (JSON), note,
  *                status (pending, accepted, rejected, withdrawn), reply, decided, created
@@ -74,12 +76,17 @@
       });
     });
     var spouses = {};
+    var wives = {};
+    var mar = {};
     (marriages || []).forEach(function (m) {
-      if (!m || m.del || !p[m.a] || !p[m.b]) return;
+      if (!m || m.del || !p[m.a]) return;
+      mar[m.id] = m;
+      (wives[m.a] = wives[m.a] || []).push(m);
+      if (!p[m.b]) return;
       (spouses[m.a] = spouses[m.a] || []).push({ id: m.b, marriage: m.id });
       (spouses[m.b] = spouses[m.b] || []).push({ id: m.a, marriage: m.id });
     });
-    var ix = { p: p, kids: kids, spouses: spouses, _chain: {}, _lvl: {}, _count: {}, _norm: {} };
+    var ix = { p: p, kids: kids, spouses: spouses, wives: wives, marriages: mar, _chain: {}, _lvl: {}, _count: {}, _norm: {} };
     ix.roots = Object.keys(p).filter(function (id) {
       return !p[id].father || !p[p[id].father];
     });
@@ -253,29 +260,27 @@
   function termFor(a, b, female) {
     if (a === 0 && b === 0) return "أنت";
     if (a === 0) {
-      if (b === 1) return word(female, "ابنك", "بنتك");
-      if (b === 2) return word(female, "حفيدك", "حفيدتك");
-      if (b === 3) return word(female, "ابن حفيدك", "بنت حفيدك");
+      if (b === 1) return word(female, "ولدك", "بنتك");
+      if (b === 2) return word(female, "ولد ولدك", "بنت ولدك");
       return "من ذريتك";
     }
     if (b === 0) {
       if (a === 1) return "أبوك";
       if (a === 2) return "جدك";
-      if (a === 3) return "جد أبيك";
-      if (a === 4) return "جد جدك";
+      if (a === 3) return "جد أبوك";
+      if (a === 4) return "أبو جدك";
       return "من أجدادك";
     }
     var base;
-    if (a === 1) base = ["أخيك", word(female, "أخوك", "أختك")];
+    if (a === 1) base = ["أخوك", word(female, "أخوك", "أختك")];
     else if (a === 2) base = ["عمك", word(female, "عمك", "عمتك")];
-    else if (a === 3) base = ["عم أبيك", word(female, "عم أبيك", "عمة أبيك")];
+    else if (a === 3) base = ["عم أبوك", word(female, "عم أبوك", "عمة أبوك")];
     else if (a === 4) base = ["عم جدك", word(female, "عم جدك", "عمة جدك")];
-    else base = null;
-    if (!base) return word(female, "ابن عم بعيد", "بنت عم بعيدة");
+    else return "من الأسرة";
     if (b === 1) return base[1];
-    var own = word(female, "ابن ", "بنت ");
+    var own = word(female, "ولد ", "بنت ");
     if (b === 2) return own + base[0];
-    if (b === 3) return own + "ابن " + base[0];
+    if (b === 3) return own + "ولد " + base[0];
     return "من ذرية " + base[0];
   }
 
@@ -283,16 +288,20 @@
    * How x is related to me: { term, a, b, via (the shared grandfather's id),
    * by ("marriage" when it goes through a husband or wife) } or null.
    */
-  /* after زوجة: أبوك becomes أبيك, أخوك becomes أخيك */
-  function genitive(term) {
-    return term.replace(/^أبوك$/, "أبيك").replace(/^أخوك$/, "أخيك");
+  /** The mother, when she is in the tree: the wife in the marriage recorded on the child. */
+  function motherOf(ix, id) {
+    var m = ix.p[id] && ix.marriages[ix.p[id].mother];
+    if (m && m.b && ix.p[m.b]) return m.b;
+    /* older rows may hold the mother's own id */
+    var raw = ix.p[id] && ix.p[id].mother;
+    return raw && ix.p[raw] ? raw : "";
   }
 
   function relate(ix, meId, xId) {
     if (!ix.p[meId] || !ix.p[xId]) return null;
     /* a mother is recorded on the child, when known */
-    if (ix.p[meId].mother === xId) return { term: "أمك", a: 1, b: 0, via: xId, by: "mother" };
-    if (ix.p[xId].mother === meId) return { term: word(isFemale(ix.p[xId]), "ابنك", "بنتك"), a: 0, b: 1, via: meId, by: "mother" };
+    if (motherOf(ix, meId) === xId) return { term: "أمك", a: 1, b: 0, via: xId, by: "mother" };
+    if (motherOf(ix, xId) === meId) return { term: word(isFemale(ix.p[xId]), "ولدك", "بنتك"), a: 0, b: 1, via: meId, by: "mother" };
     var direct = relateLines(ix, meId, xId);
     if (direct) return direct;
     var xFemale = isFemale(ix.p[xId]);
@@ -301,7 +310,7 @@
     (ix.spouses[xId] || []).some(function (s) {
       var r = relateLines(ix, meId, s.id);
       if (!r) return false;
-      var term = r.term === "أنت" ? word(xFemale, "زوجك", "زوجتك") : word(xFemale, "زوج ", "زوجة ") + genitive(r.term);
+      var term = r.term === "أنت" ? word(xFemale, "زوجك", "زوجتك") : word(xFemale, "زوج ", "زوجة ") + r.term;
       viaX = { term: term, a: r.a, b: r.b, via: r.via, by: "marriage", spouse: s.id };
       return true;
     });
@@ -428,6 +437,35 @@
     return list.slice(0, limit || 12);
   }
 
+  /** Names printed close to someone on the poster, nearest first: to jog the memory. */
+  function neighbours(ix, id, limit) {
+    var me = ix.p[id];
+    var mx = num(me.x);
+    var my = num(me.y);
+    if (mx === null) return [];
+    return Object.keys(ix.p)
+      .filter(function (k) { return k !== id && num(ix.p[k].x) !== null; })
+      .map(function (k) { return { id: k, d: Math.pow(num(ix.p[k].x) - mx, 2) + Math.pow(num(ix.p[k].y) - my, 2) }; })
+      .sort(function (a, b) { return a.d - b.d; })
+      .slice(0, limit || 4)
+      .map(function (x) { return x.id; });
+  }
+
+  /**
+   * The names still waiting for a father, for the "help us link" round:
+   * oldest level first (what the elders know best), left to right on the
+   * poster, minus the ones skipped or already suggested.
+   */
+  function helpQueue(ix, skip) {
+    var out = [];
+    [3, 4, 5, 6, 7, 8, 9].forEach(function (g) {
+      unlinked(ix, g).forEach(function (id) {
+        if (!skip || !skip[id]) out.push(id);
+      });
+    });
+    return out;
+  }
+
   /* ---------------------------------------------------------------- */
   /*  bringing in the old app's backup                                 */
   /* ---------------------------------------------------------------- */
@@ -472,9 +510,12 @@
       return { id: String(f.id), name: f.name || "", primary: f.primary ? "yes" : "", note: f.note || "" };
     });
     var marriages = (d.links || []).filter(function (l) {
-      return ids[l.aId] && ids[l.bId];
+      return ids[l.aId] && (ids[l.bId] || l.name);
     }).map(function (l) {
-      return { id: String(l.id), a: l.aId, b: l.bId, note: l.note || "" };
+      /* a is the husband */
+      var husbandFirst = !ids[l.aId] || !d.people.some(function (x) { return x.id === l.aId && x.gender === "f"; });
+      if (!ids[l.bId]) return { id: String(l.id), a: l.aId, b: "", name: l.name || "", family: l.family || "", note: l.note || "" };
+      return { id: String(l.id), a: husbandFirst ? l.aId : l.bId, b: husbandFirst ? l.bId : l.aId, name: "", family: "", note: l.note || "" };
     });
     return { people: people, families: families, marriages: marriages, me: d.meId && ids[d.meId] ? d.meId : "", problems: problems };
   }
@@ -486,7 +527,7 @@
       meId: meId || "",
       backupAt: new Date().toISOString(),
       families: (tables.families || []).map(function (f) { return { id: f.id, name: f.name, primary: f.primary === "yes", note: f.note || "" }; }),
-      links: (tables.marriages || []).map(function (m) { return { id: m.id, aId: m.a, bId: m.b, note: m.note || "" }; }),
+      links: (tables.marriages || []).map(function (m) { return { id: m.id, aId: m.a, bId: m.b || "", name: m.name || "", family: m.family || "", note: m.note || "" }; }),
       people: (tables.people || []).map(function (r) {
         return { id: r.id, name: r.name, gen: num(r.gen), fatherId: r.father || null, familyId: r.family || "main", gender: r.gender || "m", alive: r.alive !== "no", born: r.born || "", died: r.died || "", known: r.known || "", place: r.place || "", note: r.about || "", flagged: r.flagged === "yes", x: num(r.x), y: num(r.y) };
       }),
@@ -536,8 +577,8 @@
       }
     } else if (s.kind === "note" && ix.p[s.target]) {
       out.push({ table: "notes", row: { id: newId(), person: s.target, text: String(c.text || "").trim(), by: s.by || "", date: today || "" } });
-    } else if (s.kind === "marriage" && ix.p[c.a] && ix.p[c.b]) {
-      out.push({ table: "marriages", row: { id: newId(), a: c.a, b: c.b, note: c.note || "" } });
+    } else if (s.kind === "marriage" && ix.p[c.a] && (ix.p[c.b] || String(c.name || "").trim())) {
+      out.push({ table: "marriages", row: { id: newId(), a: c.a, b: ix.p[c.b] ? c.b : "", name: ix.p[c.b] ? "" : String(c.name).trim(), family: ix.p[c.b] ? "" : String(c.family || "").trim(), note: c.note || "" } });
     }
     out.push({ table: "suggestions", row: { id: s.id, status: "accepted", decided: new Date().toISOString() } });
     return out;
@@ -554,7 +595,27 @@
     });
   }
 
+  /* ---------------------------------------------------------------- */
+  /*  years                                                            */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * A year as people say it: "1395" is Hijri, "1975" is Gregorian; the other
+   * calendar is shown next to it, roughly. Anything else stays as typed.
+   */
+  function yearText(v) {
+    var s = String(v || "").replace(/[٠-٩]/g, function (d) { return String("٠١٢٣٤٥٦٧٨٩".indexOf(d)); }).trim();
+    var m = s.match(/^(\d{4})(\s*(هـ|ه|م))?$/);
+    if (!m) return s;
+    var y = Number(m[1]);
+    var hijri = m[3] ? m[3] !== "م" : y < 1600;
+    if (hijri) return y + " هـ (حوالي " + Math.round(y * 0.970229 + 621.5643) + " م)";
+    return y + " م (حوالي " + Math.round((y - 621.5643) / 0.970229) + " هـ)";
+  }
+
   var FTree = {
+    yearText: yearText,
+    motherOf: motherOf,
     POSTER: POSTER,
     norm: norm,
     build: build,
@@ -569,6 +630,8 @@
     census: census,
     unlinked: unlinked,
     fatherCandidates: fatherCandidates,
+    neighbours: neighbours,
+    helpQueue: helpQueue,
     fromBackup: fromBackup,
     toBackup: toBackup,
     parseChanges: parseChanges,

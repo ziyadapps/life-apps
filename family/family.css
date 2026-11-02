@@ -1,20 +1,63 @@
 /*
- * Family: what only this app needs, on top of shared/ui.css.
- * Written with start/end so right to left works without overrides.
+ * العائلة: what only this app needs, on top of shared/ui.css.
+ * Written with start/end so right to left needs no overrides.
  */
+
+:root {
+  --fs: 16px;
+}
+
+html.big {
+  --fs: 19px;
+}
 
 body {
   font-family: "SF Arabic", "Geeza Pro", "Noto Naskh Arabic", system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+  font-size: var(--fs);
+}
+
+.app-header {
+  gap: 8px;
 }
 
 .app-main {
-  padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+.women-btn {
+  margin-inline-start: auto;
+  min-height: 34px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.women-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
 }
 
 .page-title {
   margin: 14px 0 4px;
-  font-size: 23px;
+  font-size: calc(var(--fs) * 1.4);
   font-weight: 700;
+}
+
+.lead,
+.hint {
+  margin: 4px 0 8px;
+  font-size: calc(var(--fs) * 0.85);
+  color: var(--muted);
+}
+
+.hint {
+  display: block;
 }
 
 .back {
@@ -22,38 +65,6 @@ body {
   margin-top: 10px;
   color: var(--accent-text);
   text-decoration: none;
-  font-size: 15px;
-}
-
-.note {
-  margin: 4px 0 8px;
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.two {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.select {
-  width: 100%;
-  min-height: 46px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface);
-  font: inherit;
-  font-size: 16px;
-}
-
-textarea.field-input {
-  min-height: 70px;
-  padding: 10px 12px;
-  font: inherit;
-  font-size: 16px;
-  resize: vertical;
 }
 
 .btn {
@@ -70,194 +81,250 @@ textarea.field-input {
   flex-wrap: wrap;
 }
 
-/* search */
-.search {
-  margin-top: 12px;
+.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
-.search-input {
+.select,
+textarea.field-input {
   width: 100%;
-  min-height: 52px;
-  font-size: 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font: inherit;
 }
 
-.results .list,
-.results .section {
-  margin-top: 10px;
+.select {
+  min-height: 46px;
 }
 
-/* people as rows */
-.row-link {
+textarea.field-input {
+  min-height: 70px;
+  resize: vertical;
+}
+
+/* ---- the tree around a person -------------------------------------- */
+
+.ask {
+  display: block;
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border-inline-start: 4px solid var(--warn);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.ft {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.ft-line-up {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 8px;
+  max-width: 100%;
+  margin-bottom: 8px;
+  font-size: calc(var(--fs) * 0.8);
+}
+
+.ft-line-up a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.ft-line-up a::after {
+  content: " ‹";
+}
+
+.vline {
+  width: 2px;
+  height: 18px;
+  background: var(--line);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 92px;
+  max-width: 170px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+}
+
+.card-name {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.card-sub {
+  font-size: calc(var(--fs) * 0.75);
+  color: var(--muted);
+}
+
+.card.anc {
+  min-width: 140px;
+}
+
+.card.f .card-name {
+  color: var(--muted);
+}
+
+.card.gone {
+  border-style: dashed;
+}
+
+.card.focus {
+  min-width: 150px;
+  padding: 12px 18px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.card.focus .card-name {
+  color: inherit;
+  font-size: calc(var(--fs) * 1.25);
+}
+
+.card.focus .card-sub {
+  color: inherit;
+  opacity: 0.9;
+}
+
+/* brothers and sisters: one line, scrolled to him */
+.ft-sibs {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 56px;
-  padding: 10px 14px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  text-decoration: none;
-  cursor: pointer;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 10px 4px;
+  border-top: 2px solid transparent;
 }
 
-.row-link + .row-link {
+.ft-sibs.many {
+  justify-content: flex-start;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  border-top-color: var(--line);
+}
+
+.ft-sibs.many::-webkit-scrollbar {
+  display: none;
+}
+
+.ft-sibs .card {
+  flex: none;
+  scroll-snap-align: center;
+}
+
+.card.sib {
+  min-width: 78px;
+  opacity: 0.92;
+}
+
+/* his children: a row under a line */
+.ft-kids {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding-top: 10px;
+  border-top: 2px solid var(--line);
+}
+
+.ft-kids .card {
+  flex: 0 1 calc(33% - 8px);
+  min-width: 92px;
+}
+
+/* ---- details under the tree ----------------------------------------- */
+
+.details {
+  margin-top: 18px;
+  padding-top: 6px;
   border-top: 1px solid var(--line);
 }
 
-.row-link .row-title {
-  font-size: 16px;
-  line-height: 1.5;
-}
-
-.person.gone .row-title {
-  color: var(--muted);
-}
-
-/* home */
-.me-card {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-inline-start: 4px solid var(--accent);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: inherit;
-  text-decoration: none;
-}
-
-.me-card .note {
-  margin: 0;
-}
-
-.me-card.ask {
-  border-inline-start-color: var(--warn);
-}
-
-.tiles {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.tile {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 84px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: inherit;
-  text-decoration: none;
-}
-
-.tile.alert {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-.tile-title {
-  font-size: 17px;
-  font-weight: 700;
-}
-
-.tile-sub {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.empty-state {
-  padding: 40px 0;
-  text-align: center;
-}
-
-/* a person */
-.person-head .known {
+.known {
   margin: 0 0 4px;
   color: var(--accent-text);
   font-weight: 600;
 }
 
 .chain {
-  display: block;
   margin: 0 0 10px;
-  padding: 0;
-  border: 0;
-  background: transparent;
   color: var(--muted);
-  font: inherit;
-  font-size: 15px;
-  line-height: 1.7;
-  text-align: start;
-  cursor: pointer;
+  line-height: 1.8;
 }
 
-.rel-card {
+.meet {
+  margin: 10px 0;
+}
+
+.meet a {
+  color: var(--accent-text);
+}
+
+.facts {
+  margin-top: 10px;
+}
+
+.fact {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
-  margin: 6px 0 12px;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-.rel-card .note {
-  margin: 0;
-  color: inherit;
-  opacity: 0.85;
-}
-
-.rel-term {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.rel-card.big {
-  display: block;
-}
-
-.rel-card.big p {
-  margin: 4px 0;
-  font-size: 17px;
-}
-
-.facts .row {
   justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
 }
 
-.about {
-  margin: 0;
-  padding: 12px 14px;
+.fact + .fact {
+  border-top: 1px solid var(--line);
+}
+
+.fact-label {
+  color: var(--muted);
+  flex: none;
+}
+
+.fact-value {
+  text-align: end;
+  font-weight: 600;
+}
+
+.about,
+.note-card {
+  margin: 0 0 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
-  border: 1px solid var(--line);
   line-height: 1.8;
   white-space: pre-wrap;
-}
-
-.notes .note-card {
-  margin-bottom: 8px;
-  padding: 10px 14px;
-  border-radius: var(--radius);
-  background: var(--surface);
-  border: 1px solid var(--line);
 }
 
 .note-card p {
   margin: 0 0 4px;
-  line-height: 1.8;
-  white-space: pre-wrap;
 }
 
 .actions {
@@ -275,7 +342,172 @@ textarea.field-input {
   text-decoration: none;
 }
 
-/* choices */
+/* ---- a branch as a picture ------------------------------------------ */
+
+.branch-wrap {
+  margin-top: 10px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.branch {
+  display: inline-block;
+  min-width: 100%;
+  padding: 12px 10px;
+}
+
+/*
+ * A branch on its side: the head on the right, each generation a column to
+ * its left, brothers one under the other, so it grows downwards and scrolls
+ * like any page on a phone.
+ */
+.branch ul {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin: 0;
+  padding: 0 0 0 0;
+  padding-inline-start: 14px;
+  list-style: none;
+}
+
+.branch > ul {
+  padding-inline-start: 0;
+}
+
+.branch li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 3px 0;
+  padding-inline-start: 14px;
+}
+
+.branch > ul > li {
+  padding-inline-start: 0;
+}
+
+/* from the father to the brothers' line */
+.branch ul ul::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 0;
+  width: 14px;
+  border-top: 2px solid var(--line);
+}
+
+/* the brothers' line, and a short line to each of them */
+.branch ul ul > li::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 0;
+  width: 14px;
+  border-top: 2px solid var(--line);
+}
+
+.branch ul ul > li::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: 0;
+  border-inline-start: 2px solid var(--line);
+}
+
+.branch ul ul > li:first-child::after {
+  top: 50%;
+}
+
+.branch ul ul > li:last-child::after {
+  bottom: 50%;
+}
+
+.branch ul ul > li:only-child::after {
+  display: none;
+}
+
+.bnode {
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--ground);
+  color: inherit;
+  white-space: nowrap;
+  text-decoration: none;
+  font-size: calc(var(--fs) * 0.9);
+}
+
+.bnode small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.bnode.f {
+  color: var(--muted);
+}
+
+.bnode.me {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ---- lists, search, choices ----------------------------------------- */
+
+.search {
+  margin-top: 12px;
+}
+
+.search-input {
+  width: 100%;
+  min-height: 52px;
+  font-size: calc(var(--fs) * 1.1);
+}
+
+.results .list,
+.results .section {
+  margin-top: 10px;
+}
+
+.prow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.prow + .prow {
+  border-top: 1px solid var(--line);
+}
+
+.prow .row-title {
+  line-height: 1.5;
+}
+
+.prow.alert .row-sub {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -292,7 +524,7 @@ textarea.field-input {
   background: var(--surface);
   color: inherit;
   font: inherit;
-  font-size: 15px;
+  font-size: calc(var(--fs) * 0.9);
   text-decoration: none;
   cursor: pointer;
 }
@@ -319,84 +551,30 @@ textarea.field-input {
   flex: 1 1 100%;
 }
 
-/* the tree */
-.crumbs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  margin: 4px 0 8px;
-  font-size: 14px;
-}
+/* ---- relation -------------------------------------------------------- */
 
-.crumbs a {
-  color: var(--accent-text);
-  text-decoration: none;
-}
-
-.crumbs a::after {
-  content: " ‹";
-  color: var(--muted);
-}
-
-.tree {
-  margin-top: 10px;
-  padding: 6px 0;
-  border: 1px solid var(--line);
+.rel-card {
+  margin: 12px 0;
+  padding: 14px 16px;
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
-.node {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 42px;
-  padding-inline-end: 10px;
+.rel-card p {
+  margin: 4px 0;
 }
 
-.node.me {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-}
-
-.node.f .node-name {
-  color: var(--muted);
-}
-
-.twist {
-  flex: none;
-  width: 36px;
-  height: 36px;
-  border: 0;
-  background: transparent;
-  color: var(--accent-text);
-  font-size: 16px;
-  cursor: pointer;
-}
-
-.twist.none {
-  display: inline-block;
-}
-
-.node-name {
-  flex: 1;
-  min-width: 0;
+.rel-card .hint {
   color: inherit;
-  font-size: 16px;
-  text-decoration: none;
+  opacity: 0.85;
 }
 
-.node-count {
-  flex: none;
-  min-width: 28px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--ground);
-  color: var(--muted);
-  font-size: 12px;
-  text-align: center;
+.rel-big {
+  font-size: calc(var(--fs) * 1.3);
+  font-weight: 700;
 }
 
-/* relation */
 .rel-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -424,7 +602,49 @@ textarea.field-input {
   font-weight: 700;
 }
 
-/* suggestions */
+.rel-step.f {
+  color: var(--muted);
+}
+
+/* ---- help link --------------------------------------------------------- */
+
+.help-card {
+  margin: 12px 0;
+  padding: 18px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: center;
+}
+
+.help-name {
+  margin: 6px 0;
+  font-size: calc(var(--fs) * 1.8);
+  font-weight: 700;
+}
+
+.cands {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cand {
+  min-height: 54px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: calc(var(--fs) * 1.05);
+  text-align: start;
+  cursor: pointer;
+}
+
+/* ---- changes from the family ----------------------------------------- */
+
 .card-pad {
   padding: 12px 14px;
   border: 1px solid var(--line);
@@ -446,7 +666,11 @@ textarea.field-input {
   gap: 8px;
   padding: 6px 0;
   border-top: 1px solid var(--line);
-  font-size: 14px;
+  font-size: calc(var(--fs) * 0.9);
+}
+
+.diff-row.two-col {
+  grid-template-columns: 7em 1fr;
 }
 
 .diff-field {
@@ -482,53 +706,8 @@ textarea.field-input {
   margin: 8px 0;
 }
 
-/* linking */
-.link-row + .link-row {
-  border-top: 1px solid var(--line);
-}
+/* ---- checking ---------------------------------------------------------- */
 
-.link-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  min-height: 52px;
-  padding: 8px 14px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-
-.cands {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px 14px 12px;
-}
-
-.cand {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--ground);
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-
-.cand .note {
-  margin: 0;
-  flex: none;
-}
-
-/* checking */
 .census {
   width: 100%;
   border-collapse: collapse;
@@ -554,4 +733,57 @@ textarea.field-input {
 .census tr.bad td {
   color: var(--bad);
   font-weight: 700;
+}
+
+.empty-state {
+  padding: 40px 0;
+  text-align: center;
+}
+
+/* ---- tabs --------------------------------------------------------------- */
+
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  background: var(--ground);
+  border-top: 1px solid var(--line);
+  padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
+}
+
+.tabbar-inner {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: calc(var(--fs) * 0.85);
+}
+
+.tab[aria-current="page"] {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.tab-count {
+  display: inline-block;
+  min-width: 18px;
+  margin-inline-start: 4px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
 }
