@@ -15,15 +15,15 @@ The hub now talks to Emby for the Watchlist, so it needs the new script and one 
 1. **Life apps hub** sheet, **Extensions**, **Apps Script**.
 2. Select everything in **Code.gs**, delete it, paste the new `hub/Code.gs`. **Save**.
 3. **Deploy**, **Manage deployments**, the pencil, **Version**: **New version**, **Deploy**.
-4. Check: open the hub address in a browser. It should say `"version":"2026-11-02a"`.
+4. Check: open the hub address in a browser. It should say `"version":"2026-11-02b"`.
 5. Reload the hub sheet.
 
 ## 3. The Watchlist's sheet and your Emby login
 
 1. **Life apps** menu, **Add an app...**, type `watchlist`, OK.
-2. **Life apps** menu, **Emby login for Watchlist...**. Google asks for permission the first time, because the hub now connects to a server outside Google: **Continue**, choose your account, **Advanced**, **Go to Life apps hub**, **Allow**. Then run **Emby login for Watchlist...** again.
-3. Type the server address from your provider (like `https://050.example.mx`; add `:port` only if it is not 443), the username, the password.
-4. It should say **Signed in to ...**.
+2. Give the hub its new permission (it now connects to a server outside Google). In **Apps Script**, choose **authorize** in the function list at the top, press **Run**. Google says **Authorization required**: **Review permissions**, your account, **Advanced**, **Go to ... (unsafe)**, **Allow**. The list includes "Connect to an external service". If it runs without asking, see "If Google never asks" below.
+3. Back in the sheet: **Life apps** menu, **Emby login for Watchlist...**. Type the server address from your provider (like `https://050.example.mx`; add `:port` only if it is not 443), the username, the password.
+It should say **Signed in to ...**.
 
 The login is kept in the hub script's own settings. It is not in any sheet, not on your phone, and not in the app's code. To change it, run the menu item again.
 
@@ -53,6 +53,21 @@ The login is kept in the hub script's own settings. It is not in any sheet, not 
 - **Search**: any film, series or anime.
 - **Discover**: what is new on your Emby, what is popular on your services, trending this week, popular anime, top rated films.
 
+### Browse
+
+**Discover**, then **Browse Emby**, **Your services** or **Everything**:
+
+- **Emby**: your server's own libraries (anime first), its genres, and Recently added, Top rated, Newest, Surprise me or A to Z. 30 at a time, **Load more** for the next.
+- **Your services** and **Everything**: anime series, anime films, series or films, a genre, and Popular, Top rated or Newest.
+
+### For you
+
+At the top of Discover: suggestions from what you rated 8 or more and what you are watching (people who liked those also liked these), in three rows: on Emby, anime on Emby, and on your services. Nothing already on your list. The more you rate, the better they get.
+
+### The Emby library as a spreadsheet
+
+In the hub sheet: **Life apps**, **Export the Emby library**. Every film and series goes into **Life apps: Emby library** in your Life apps folder (library, name, year, rating, genres, seasons, episodes, TMDB and IMDb ids). Run it again to refresh it. For Excel: open it, **File**, **Download**, **Microsoft Excel**.
+
 ### A title
 
 - **Ratings** from TMDB, IMDb, Rotten Tomatoes, Metacritic, and MyAnimeList for anime.
@@ -69,3 +84,13 @@ Each title on your list is refreshed about once a day (seasons, episodes, where 
 ### Where the data comes from
 
 TMDB and its streaming data (JustWatch) cover services in Saudi Arabia. They do not know your Emby; the hub asks it. Data can lag a day or two behind the services themselves.
+
+## If Google never asks
+
+When the script has a manifest that lists its permissions, Google does not ask for new ones by itself.
+
+1. In **Apps Script**, the gear (**Project Settings**), tick **Show "appsscript.json" manifest file in editor**.
+2. Open **appsscript.json** in the file list. If it has an `"oauthScopes"` list, add this line inside the list (with a comma after the line before it):
+   `"https://www.googleapis.com/auth/script.external_request"`
+3. **Save**, run **authorize** again, and allow.
+

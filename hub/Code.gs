@@ -25,7 +25,7 @@
 
 /* Bump this whenever you paste in a new copy. Apps read it back from the
    published address, which proves the address serves the code you saved. */
-const VERSION = "2026-11-02a";
+const VERSION = "2026-11-02b";
 
 const TZ = "Asia/Riyadh";
 const APPS_FOLDER = "Life apps";
@@ -97,6 +97,7 @@ function onOpen() {
     .addItem("New family member key...", "menuNewFamilyKey")
     .addItem("Add an app...", "menuAddApp")
     .addItem("Emby login for Watchlist...", "menuEmby")
+    .addItem("Export the Emby library", "menuExportEmby")
     .addSeparator()
     .addItem("Run the check", "menuHealth")
     .addItem("Back up now", "dailyBackup")
@@ -988,7 +989,9 @@ function embyGetAll_(c, requests) {
   function build() {
     return requests.map(function (r) {
       const path = r.path.replace("{uid}", c.uid);
-      return { url: c.url + path + "?" + embyQuery_(path, r.params), method: "get", headers: { "X-Emby-Token": c.token, "X-Emby-Authorization": EMBY_CLIENT }, muteHttpExceptions: true };
+      const params = {};
+      Object.keys(r.params || {}).forEach(function (k) { params[k] = r.params[k] === "{uid}" ? c.uid : r.params[k]; });
+      return { url: c.url + path + "?" + embyQuery_(path, params), method: "get", headers: { "X-Emby-Token": c.token, "X-Emby-Authorization": EMBY_CLIENT }, muteHttpExceptions: true };
     });
   }
   if (!c.token || !c.uid) embyLogin_(c);
@@ -1075,6 +1078,130 @@ function emby_(req) {
     const res = embyGetAll_(c, [{ path: "/emby/Users/{uid}/Items", params: { Recursive: "true", IncludeItemTypes: tv ? "Series" : "Movie", SortBy: tv ? "DateLastContentAdded" : "DateCreated", SortOrder: "Descending", Fields: EMBY_FIELDS, Limit: Math.min(Number(req.limit) || 30, 60) } }])[0];
     return { ok: true, items: (res.Items || []).map(embyItem_) };
   }
+  if (op === "libraries") {
+    const res = embyGetAll_(c, [{ path: "/emby/Users/{uid}/Views", params: {} }])[0];
+    return {
+      ok: true,
+      libraries: (res.Items || [])
+        .filter(function (v) { return !v.CollectionType || ["movies", "tvshows", "mixed"].indexOf(v.CollectionType) >= 0; })
+        .map(function (v) { return { id: v.Id, name: v.Name, type: v.CollectionType || "mixed" }; }),
+    };
+  }
+  if (op === "genres") {
+    const res = embyGetAll_(c, [{ path: "/emby/Genres", params: { UserId: "{uid}", ParentId: req.parent || "", IncludeItemTypes: req.kind === "tv" ? "Series" : req.kind === "movie" ? "Movie" : "Movie,Series", Recursive: "true", SortBy: "SortName" } }])[0];
+    return { ok: true, genres: (res.Items || []).map(function (g) { return g.Name; }) };
+  }
+  if (op === "browse") {
+    const tv = req.kind === "tv";
+    const sorts = { added: tv ? "DateLastContentAdded,DateCreated" : "DateCreated", rating: "CommunityRating", newest: "PremiereDate,ProductionYear", random: "Random", name: "SortName" };
+    const sort = sorts[req.sort] ? req.sort : "added";
+    const res = embyGetAll_(c, [{ path: "/emby/Users/{uid}/Items", params: {
+      Recursive: "true",
+      ParentId: req.parent || "",
+      IncludeItemTypes: req.kind === "tv" ? "Series" : req.kind === "movie" ? "Movie" : "Movie,Series",
+      Genres: req.genre || "",
+      SortBy: sorts[sort],
+      SortOrder: sort === "name" ? "Ascending" : "Descending",
+      StartIndex: Math.max(0, Number(req.start) || 0),
+      Limit: Math.min(Number(req.limit) || 30, 60),
+      Fields: EMBY_FIELDS + ",CommunityRating,Genres",
+      EnableImages: "false",
+    } }])[0];
+    return {
+      ok: true,
+      total: res.TotalRecordCount || 0,
+      items: (res.Items || []).map(function (it) {
+        const e = embyItem_(it);
+        e.rating = it.CommunityRating ? Math.round(it.CommunityRating * 10) / 10 : "";
+        e.genres = (it.Genres || []).join(", ");
+        return e;
+      }),
+    };
+  }
   throw fail_("Emby: unknown request.");
 }
 
+/* ------------------------------------------------------------------ */
+/*  Emby library export                                               */
+/* ------------------------------------------------------------------ */
+
+const EMBY_EXPORT_COLS = ["library", "type", "name", "year", "rating", "genres", "seasons", "episodes", "added", "tmdb", "imdb"];
+const EMBY_PAGE = 500;
+
+/**
+ * Every film and series on the Emby server, one row each, into a sheet of
+ * its own ("Life apps: Emby library" in the Life apps folder). Run again to
+ * refresh it. Download it as Excel from File, Download.
+ */
+function exportEmby_() {
+  const c = embyConf_();
+  const libs = emby_({ op: "libraries" }).libraries;
+  const plan = [];
+  libs.forEach(function (l) {
+    const types = l.type === "movies" ? "Movie" : l.type === "tvshows" ? "Series" : "Movie,Series";
+    const head = embyGetAll_(c, [{ path: "/emby/Users/{uid}/Items", params: { Recursive: "true", ParentId: l.id, IncludeItemTypes: types, Limit: 0 } }])[0];
+    for (let start = 0; start < (head.TotalRecordCount || 0); start += EMBY_PAGE) plan.push({ lib: l, types: types, start: start });
+  });
+  const rows = [];
+  for (let i = 0; i < plan.length; i += 8) {
+    const batch = plan.slice(i, i + 8);
+    const res = embyGetAll_(c, batch.map(function (p) {
+      return { path: "/emby/Users/{uid}/Items", params: { Recursive: "true", ParentId: p.lib.id, IncludeItemTypes: p.types, SortBy: "SortName", StartIndex: p.start, Limit: EMBY_PAGE, Fields: "ProviderIds,ProductionYear,ChildCount,RecursiveItemCount,DateCreated,CommunityRating,Genres", EnableImages: "false" } };
+    }));
+    res.forEach(function (r, n) {
+      (r.Items || []).forEach(function (it) {
+        const e = embyItem_(it);
+        rows.push([batch[n].lib.name, e.type === "tv" ? "series" : "film", e.name, e.year, it.CommunityRating ? Math.round(it.CommunityRating * 10) / 10 : "", (it.Genres || []).join(", "), e.seasons, e.episodes, e.added, e.tmdb, e.imdb]);
+      });
+    });
+  }
+  const props = PropertiesService.getScriptProperties();
+  let ss = null;
+  const id = props.getProperty("EMBY_EXPORT_ID");
+  if (id) {
+    try {
+      ss = SpreadsheetApp.openById(id);
+    } catch (err) {
+      ss = null;
+    }
+  }
+  if (!ss) {
+    ss = SpreadsheetApp.create("Life apps: Emby library");
+    ss.setSpreadsheetTimeZone(TZ);
+    DriveApp.getFileById(ss.getId()).moveTo(folder_(APPS_FOLDER));
+    props.setProperty("EMBY_EXPORT_ID", ss.getId());
+  }
+  const sh = ss.getSheets()[0];
+  sh.setName("library");
+  sh.clear();
+  const all = [EMBY_EXPORT_COLS].concat(rows);
+  if (sh.getMaxRows() < all.length) sh.insertRowsAfter(sh.getMaxRows(), all.length - sh.getMaxRows());
+  if (sh.getMaxColumns() < EMBY_EXPORT_COLS.length) sh.insertColumnsAfter(sh.getMaxColumns(), EMBY_EXPORT_COLS.length - sh.getMaxColumns());
+  sh.getRange(1, 1, all.length, EMBY_EXPORT_COLS.length).setNumberFormat("@").setValues(all.map(function (r) { return r.map(function (v) { return v === null || v === undefined ? "" : String(v); }); }));
+  sh.getRange(1, 1, 1, EMBY_EXPORT_COLS.length).setFontWeight("bold");
+  sh.setFrozenRows(1);
+  log_("emby", "exported " + rows.length + " titles from " + libs.length + " libraries");
+  return { url: ss.getUrl(), count: rows.length, libraries: libs.length };
+}
+
+function menuExportEmby() {
+  const ui = SpreadsheetApp.getUi();
+  let msg;
+  try {
+    const r = exportEmby_();
+    msg = r.count.toLocaleString() + " titles from " + r.libraries + " libraries are in the sheet \"Life apps: Emby library\" in your Life apps folder.\n\n" + r.url + "\n\nTo get an Excel file: open it, File, Download, Microsoft Excel.";
+  } catch (err) {
+    msg = "The export stopped: " + err.message;
+  }
+  ui.alert("Emby library", msg, ui.ButtonSet.OK);
+}
+
+
+/**
+ * Run this once from the editor (choose "authorize", press Run) so Google
+ * asks for the permission to reach servers outside Google, which Emby needs.
+ */
+function authorize() {
+  UrlFetchApp.fetch("https://www.google.com", { muteHttpExceptions: true });
+  return "Allowed. Now run Life apps, Emby login for Watchlist.";
+}

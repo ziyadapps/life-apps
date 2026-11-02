@@ -69,7 +69,10 @@
   function tmdb(path, params) {
     var token = String(S.set.tmdb || "").trim();
     if (!token) return Promise.reject(new Error("Add your TMDB key in Settings to look things up."));
-    var q = new URLSearchParams(params || {});
+    var q = new URLSearchParams();
+    Object.keys(params || {}).forEach(function (k) {
+      if (params[k] !== "" && params[k] !== null && params[k] !== undefined) q.set(k, params[k]);
+    });
     var headers = { accept: "application/json" };
     if (/^[a-f0-9]{32}$/i.test(token)) q.set("api_key", token);
     else headers.Authorization = "Bearer " + token;
@@ -386,30 +389,173 @@
     return (res.results || []).map(function (r) { return W.fromResult(r, kind); }).filter(Boolean);
   }
 
-  /** The newest on Emby, matched to TMDB for posters where Emby knows the TMDB id. */
-  function embyLatest(kind) {
-    return embyCall({ op: "latest", kind: kind, limit: 20 }).then(function (res) {
+  /* ---------------------------------------------------------------- */
+  /*  Emby titles as cards                                             */
+  /* ---------------------------------------------------------------- */
+
+  /* a few lookups at a time, so a page of 30 does not flood TMDB */
+  function limited(list, n, fn) {
+    var out = new Array(list.length);
+    var i = 0;
+    function next() {
+      if (i >= list.length) return Promise.resolve();
+      var at = i++;
+      return Promise.resolve(fn(list[at], at)).then(function (v) { out[at] = v; }, function () { out[at] = null; }).then(next);
+    }
+    var runners = [];
+    for (var k = 0; k < Math.min(n, list.length); k++) runners.push(next());
+    return Promise.all(runners).then(function () { return out; });
+  }
+
+  /**
+   * An Emby title as a card: found on TMDB by its id, or by name and year
+   * when Emby has no TMDB id, so it gets a poster and opens its page.
+   */
+  function embyCard(e) {
+    var kind = e.type === "tv" ? "tv" : "movie";
+    var extra = [e.rating ? "★ " + Number(e.rating).toFixed(1) : "", e.seasons ? e.seasons + (e.seasons === 1 ? " season" : " seasons") : ""].filter(String).join(" · ");
+    var base = { title: e.name, year: e.year, kind: kind, extra: extra, emby: true };
+    if (!S.set.tmdb) return Promise.resolve(base);
+    var found = e.tmdb
+      ? tmdb("/" + kind + "/" + e.tmdb, { language: lang() }).then(function (d) { return W.fromResult(d, kind); })
+      : tmdb("/search/" + kind, { query: e.name, language: lang(), year: kind === "movie" && e.year ? e.year : "", first_air_date_year: kind === "tv" && e.year ? e.year : "" }).then(function (res) {
+          var r = (res.results || [])[0];
+          return r ? W.fromResult(r, kind) : null;
+        });
+    return found.then(function (r) {
+      if (!r) return base;
+      r.extra = extra || (r.score ? "★ " + r.score.toFixed(1) : "");
+      r.emby = true;
+      return r;
+    }, function () { return base; });
+  }
+
+  function embyFail(e) {
+    S.emby = { state: "error", msg: e.message };
+    throw e;
+  }
+
+  function embyLibraries() {
+    if (S.libs && Date.now() - S.libs.at < 3600000) return Promise.resolve(S.libs.list);
+    return embyCall({ op: "libraries" }).then(function (res) {
+      S.libs = { at: Date.now(), list: res.libraries };
+      return res.libraries;
+    }, embyFail);
+  }
+
+  function isAnimeLib(l) {
+    return /anime|أنمي|انمي/i.test(l.name);
+  }
+
+  /** The newest on Emby in a library (or all of it), as cards. */
+  function embyNewest(kind, parent, limit) {
+    return embyCall({ op: "browse", kind: kind, parent: parent || "", sort: "added", limit: limit || 20 }).then(function (res) {
       S.emby = { state: "ok", msg: "" };
-      return Promise.all(res.items.map(function (e) {
-        var base = { title: e.name, year: e.year, kind: kind, extra: e.seasons ? e.seasons + (e.seasons === 1 ? " season" : " seasons") : "" };
-        if (!e.tmdb || !S.set.tmdb) return base;
-        return tmdb("/" + kind + "/" + e.tmdb, { language: lang() }).then(function (d) {
-          var r = W.fromResult(d, kind);
-          r.extra = base.extra;
-          return r;
-        }, function () { return base; });
-      }));
-    }, function (e) {
-      S.emby = { state: "error", msg: e.message };
-      throw e;
+      return limited(res.items, 6, embyCard).then(function (cards) { return cards.filter(Boolean); });
+    }, embyFail);
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  for you                                                          */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Suggestions from what you rated 8 or more and what you are watching:
+   * TMDB's "people who liked this also liked" for each, counted up, then
+   * kept to what is on Emby and what is on your services.
+   */
+  function forYou() {
+    if (S.recs && Date.now() - S.recs.at < 30 * 60000) return S.recs.promise;
+    var seeds = S.hub.all("items")
+      .filter(function (i) { return Number(i.rating) >= 8 || i.status === "watching"; })
+      .sort(function (a, b) { return (Number(b.rating) || 7.5) - (Number(a.rating) || 7.5); })
+      .slice(0, 10);
+    var promise;
+    if (!seeds.length) promise = Promise.resolve({ none: true, emby: [], anime: [], mine: [] });
+    else {
+      promise = limited(seeds, 4, function (s) {
+        return tmdb("/" + s.kind + "/" + s.tmdb + "/recommendations", { language: lang() }).then(function (res) { return { seed: s, list: results(res, s.kind) }; });
+      }).then(function (all) {
+        var pool = {};
+        all.filter(Boolean).forEach(function (x) {
+          x.list.forEach(function (r, rank) {
+            if (item(r.key)) return;
+            var p = (pool[r.key] = pool[r.key] || { r: r, score: 0, because: [] });
+            p.score += (Number(x.seed.rating) || 7) / 10 + (20 - rank) / 40;
+            if (p.because.indexOf(x.seed.title) < 0) p.because.push(x.seed.title);
+          });
+        });
+        var ranked = Object.keys(pool).map(function (k) { return pool[k]; }).sort(function (a, b) { return b.score - a.score || b.r.votes - a.r.votes; }).slice(0, 60);
+        ranked.forEach(function (p) {
+          p.r.extra = "Because of " + p.because.slice(0, 2).join(" and ");
+        });
+        var ask = ranked.map(function (p) { return { key: p.r.key, kind: p.r.kind, tmdb: p.r.id, title: p.r.title, year: p.r.year }; });
+        var onEmby = Promise.all([0, 30].map(function (at) {
+          var part = ask.slice(at, at + 30);
+          return part.length ? embyCall({ op: "find", items: part }).then(function (res) { return res.found; }) : {};
+        })).then(function (parts) {
+          var found = Object.assign.apply(null, [{}].concat(parts));
+          return ranked.filter(function (p) { return found[p.r.key]; }).map(function (p) { return p.r; });
+        }, function (e) {
+          S.emby = { state: "error", msg: e.message };
+          return null;
+        });
+        var services = W.serviceIds(S.set);
+        var onMine = !services.length ? Promise.resolve([]) : limited(ranked.slice(0, 40), 5, function (p) {
+          return details(p.r.kind, p.r.id).then(function (d) {
+            var w = W.providersOf(d["watch/providers"], W.REGION);
+            return w.stream.some(function (x) { return services.indexOf(String(x.id)) >= 0; }) ? p.r : null;
+          });
+        }).then(function (list) { return list.filter(Boolean); });
+        return Promise.all([onEmby, onMine]).then(function (r) {
+          var emby = r[0];
+          return {
+            embyError: emby === null,
+            emby: (emby || []).filter(function (x) { return !x.anime; }).slice(0, 20),
+            anime: (emby || []).filter(function (x) { return x.anime; }).slice(0, 20),
+            mine: r[1].slice(0, 20),
+          };
+        });
+      });
+    }
+    S.recs = { at: Date.now(), promise: promise };
+    promise.catch(function () { S.recs = null; });
+    return promise;
+  }
+
+  function recShelf(name, id, pick) {
+    return shelf(name, id, function () {
+      return forYou().then(function (r) {
+        if (r.none) throw new Error("Rate a few titles 8 or more (or mark something Watching) and suggestions show here.");
+        if (r.embyError && pick !== "mine") throw new Error(S.emby.msg || "Emby is not reachable right now.");
+        return r[pick];
+      });
     });
   }
 
+  /* ---------------------------------------------------------------- */
+  /*  discover                                                         */
+  /* ---------------------------------------------------------------- */
+
   function viewDiscover(main) {
     main.appendChild(h("div", null, title("Discover")));
+    main.appendChild(h("div", { class: "btn-row", id: "browse-links" },
+      h("a", { class: "btn btn-primary", href: "#/browse?src=emby" }, "Browse Emby"),
+      h("a", { class: "btn", href: "#/browse?src=mine" }, "Your services"),
+      h("a", { class: "btn", href: "#/browse?src=all" }, "Everything")));
     var mine = W.serviceIds(S.set);
-    main.appendChild(shelf("New on Emby: series", "shelf-emby-tv", function () { return embyLatest("tv"); }));
-    main.appendChild(shelf("New on Emby: films", "shelf-emby-movie", function () { return embyLatest("movie"); }));
+    main.appendChild(recShelf("For you on Emby", "shelf-for-emby", "emby"));
+    main.appendChild(recShelf("Anime for you on Emby", "shelf-for-anime", "anime"));
+    if (mine.length) main.appendChild(recShelf("For you on your services", "shelf-for-mine", "mine"));
+    var animeHolder = h("div", null);
+    main.appendChild(animeHolder);
+    embyLibraries().then(function (libs) {
+      libs.filter(isAnimeLib).forEach(function (l) {
+        animeHolder.appendChild(shelf("New on Emby: " + l.name, "shelf-lib-" + l.id, function () { return embyNewest(l.type === "movies" ? "movie" : l.type === "tvshows" ? "tv" : "", l.id, 20); }));
+      });
+    }, function () {});
+    main.appendChild(shelf("New on Emby: series", "shelf-emby-tv", function () { return embyNewest("tv"); }));
+    main.appendChild(shelf("New on Emby: films", "shelf-emby-movie", function () { return embyNewest("movie"); }));
     if (mine.length) {
       var p = { watch_region: W.REGION, with_watch_providers: mine.join("|"), with_watch_monetization_types: "flatrate", sort_by: "popularity.desc", language: lang() };
       main.appendChild(shelf("Popular on your services: series", "shelf-yours-tv", function () { return tmdb("/discover/tv", p).then(function (r) { return results(r, "tv"); }); }));
@@ -420,6 +566,163 @@
       return tmdb("/discover/tv", { with_genres: "16", with_original_language: "ja", sort_by: "popularity.desc", language: lang() }).then(function (r) { return results(r, "tv"); });
     }));
     main.appendChild(shelf("Top rated films", "shelf-top", function () { return tmdb("/movie/top_rated", { language: lang() }).then(function (r) { return results(r, "movie"); }); }));
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  browse                                                           */
+  /* ---------------------------------------------------------------- */
+
+  var WHAT = [
+    { value: "anime-tv", label: "Anime series", kind: "tv", anime: true },
+    { value: "anime-movie", label: "Anime films", kind: "movie", anime: true },
+    { value: "tv", label: "Series", kind: "tv" },
+    { value: "movie", label: "Films", kind: "movie" },
+  ];
+  var TMDB_SORTS = [{ value: "popular", label: "Popular" }, { value: "rating", label: "Top rated" }, { value: "newest", label: "Newest" }];
+  var EMBY_SORTS = [{ value: "added", label: "Recently added" }, { value: "rating", label: "Top rated" }, { value: "newest", label: "Newest" }, { value: "random", label: "Surprise me" }, { value: "name", label: "A to Z" }];
+
+  function card(r) {
+    var mine = r.key && item(r.key);
+    return h(r.id ? "a" : "div", { class: "grid-item", href: r.id ? "#/t/" + r.kind + "/" + r.id : null, "data-key": r.key || null },
+      poster(r.poster, "grid-poster"),
+      h("span", { class: "shelf-title" }, r.title),
+      h("span", { class: "shelf-sub" }, [r.year, r.extra || (r.score ? "★ " + r.score.toFixed(1) : ""), mine ? "on list" : ""].filter(String).join(" · ")));
+  }
+
+  function chipRow(options, value, id, onPick) {
+    var wrap = h("div", { class: "chips", id: id, role: "group" });
+    options.forEach(function (o) {
+      wrap.appendChild(h("button", { type: "button", class: "chip", "data-value": o.value, "aria-pressed": String(o.value === value), onclick: function () { onPick(o.value); } }, o.label));
+    });
+    /* the chosen one in view, when the row scrolls sideways */
+    setTimeout(function () {
+      var on = wrap.querySelector('[aria-pressed="true"]');
+      if (on) wrap.scrollLeft = on.offsetLeft - wrap.offsetLeft - 16;
+    }, 0);
+    return wrap;
+  }
+
+  function viewBrowse(main, q) {
+    var src = /^(emby|mine|all)$/.test(q.src) ? q.src : "emby";
+    function to(change) {
+      var n = { src: src, what: q.what || "", genre: q.genre || "", sort: q.sort || "" };
+      Object.keys(change).forEach(function (k) { n[k] = change[k]; });
+      if (change.src) { n.what = ""; n.genre = ""; n.sort = ""; }
+      if (change.what) n.genre = "";
+      var qs = Object.keys(n).filter(function (k) { return n[k]; }).map(function (k) { return k + "=" + encodeURIComponent(n[k]); }).join("&");
+      go("/browse?" + qs);
+    }
+    main.appendChild(back("Discover", "/discover"));
+    main.appendChild(h("div", null, title("Browse")));
+    main.appendChild(toggle([{ value: "emby", label: "Emby" }, { value: "mine", label: "Your services" }, { value: "all", label: "Everything" }], src, { id: "src" }, function (v) { to({ src: v }); }));
+    var controls = h("div", { id: "browse-controls", style: "margin-top:12px" });
+    var grid = h("div", { class: "grid", id: "grid" });
+    var more = h("button", { type: "button", class: "btn btn-wide", id: "more", style: "display:none" }, "Load more");
+    var status = h("p", { class: "note", id: "browse-status" });
+    main.appendChild(controls);
+    main.appendChild(status);
+    main.appendChild(grid);
+    main.appendChild(more);
+    var page = 0;
+    var loading = false;
+
+    function fill(load) {
+      if (loading) return;
+      loading = true;
+      more.style.display = "none";
+      status.textContent = page ? status.textContent : "Loading…";
+      load(page).then(function (res) {
+        loading = false;
+        status.textContent = !res.items.length && !page ? "Nothing found." : res.total ? res.total.toLocaleString("en-US") + " titles" : "";
+        res.items.forEach(function (r) { if (r) grid.appendChild(card(r)); });
+        page++;
+        more.style.display = res.more ? "" : "none";
+      }, function (e) {
+        loading = false;
+        status.textContent = e.message;
+      });
+    }
+
+    if (src === "emby") {
+      controls.appendChild(h("p", { class: "note" }, "Loading your libraries…"));
+      embyLibraries().then(function (libs) {
+        Kit.clear(controls);
+        if (!libs.length) { status.textContent = "No libraries found on Emby."; return; }
+        var lib = libs.filter(function (l) { return l.id === q.what; })[0] || libs.filter(isAnimeLib)[0] || libs[0];
+        var kind = lib.type === "movies" ? "movie" : lib.type === "tvshows" ? "tv" : "";
+        var sort = q.sort || "added";
+        controls.appendChild(chipRow(libs.map(function (l) { return { value: l.id, label: l.name }; }), lib.id, "libs", function (v) { to({ what: v }); }));
+        var genreSel = select([{ value: "", label: "All genres" }], q.genre || "", { id: "genre", "aria-label": "Genre" });
+        var sortSel = select(EMBY_SORTS, sort, { id: "sort", "aria-label": "Sort" });
+        genreSel.addEventListener("change", function () { to({ genre: genreSel.value }); });
+        sortSel.addEventListener("change", function () { to({ sort: sortSel.value }); });
+        controls.appendChild(h("div", { class: "two", style: "margin-top:10px" }, genreSel, sortSel));
+        embyCall({ op: "genres", parent: lib.id, kind: kind }).then(function (res) {
+          res.genres.forEach(function (g) {
+            var o = h("option", { value: g }, g);
+            if (g === q.genre) o.selected = true;
+            genreSel.appendChild(o);
+          });
+        }, function () {});
+        var load = function (p) {
+          return embyCall({ op: "browse", parent: lib.id, kind: kind, genre: q.genre || "", sort: sort, start: p * 30, limit: 30 }).then(function (res) {
+            return limited(res.items, 6, embyCard).then(function (cards) {
+              return { items: cards, total: res.total, more: (p + 1) * 30 < res.total };
+            });
+          });
+        };
+        more.addEventListener("click", function () { fill(load); });
+        fill(load);
+      }, function (e) {
+        Kit.clear(controls);
+        status.textContent = e.message;
+      });
+      return;
+    }
+
+    /* TMDB: your services or everything */
+    var what = WHAT.filter(function (w) { return w.value === q.what; })[0] || WHAT[0];
+    var sort = q.sort || "popular";
+    var services = W.serviceIds(S.set);
+    controls.appendChild(chipRow(WHAT, what.value, "what", function (v) { to({ what: v }); }));
+    var genreSel = select([{ value: "", label: "All genres" }], q.genre || "", { id: "genre", "aria-label": "Genre" });
+    var sortSel = select(TMDB_SORTS, sort, { id: "sort", "aria-label": "Sort" });
+    genreSel.addEventListener("change", function () { to({ genre: genreSel.value }); });
+    sortSel.addEventListener("change", function () { to({ sort: sortSel.value }); });
+    controls.appendChild(h("div", { class: "two", style: "margin-top:10px" }, genreSel, sortSel));
+    if (src === "mine" && !services.length) {
+      status.appendChild(h("span", null, "Choose your services in ", h("a", { href: "#/settings" }, "Settings"), " first."));
+      return;
+    }
+    tmdb("/genre/" + what.kind + "/list", { language: lang() }).then(function (res) {
+      (res.genres || []).forEach(function (g) {
+        if (what.anime && g.id === 16) return;
+        var o = h("option", { value: String(g.id) }, g.name);
+        if (String(g.id) === q.genre) o.selected = true;
+        genreSel.appendChild(o);
+      });
+    }, function () {});
+    var dateKey = what.kind === "tv" ? "first_air_date" : "primary_release_date";
+    var params = { language: lang(), include_adult: "false" };
+    var genres = [];
+    if (what.anime) { genres.push("16"); params.with_original_language = "ja"; }
+    if (q.genre) genres.push(q.genre);
+    if (genres.length) params.with_genres = genres.join(",");
+    if (src === "mine") {
+      params.watch_region = W.REGION;
+      params.with_watch_providers = services.join("|");
+      params.with_watch_monetization_types = "flatrate";
+    }
+    if (sort === "rating") { params.sort_by = "vote_average.desc"; params["vote_count.gte"] = what.anime ? "100" : "300"; }
+    else if (sort === "newest") { params.sort_by = dateKey + ".desc"; params[dateKey + ".lte"] = today(); params["vote_count.gte"] = "10"; }
+    else params.sort_by = "popularity.desc";
+    var load = function (p) {
+      return tmdb("/discover/" + what.kind, Object.assign({ page: String(p + 1) }, params)).then(function (res) {
+        return { items: results(res, what.kind), total: res.total_results, more: p + 1 < Math.min(res.total_pages || 1, 500) };
+      });
+    };
+    more.addEventListener("click", function () { fill(load); });
+    fill(load);
   }
 
   /* ---------------------------------------------------------------- */
@@ -722,7 +1025,7 @@
   }
 
   function paintTabs(name) {
-    var owner = { "": "", want: "", done: "", t: "", search: "search", discover: "discover", settings: "settings" }[name];
+    var owner = { "": "", want: "", done: "", t: "", search: "search", discover: "discover", browse: "discover", settings: "settings" }[name];
     Object.keys(tabEls).forEach(function (k) {
       if (k === owner) tabEls[k].setAttribute("aria-current", "page");
       else tabEls[k].removeAttribute("aria-current");
@@ -731,7 +1034,7 @@
 
   var current = { name: "", key: "" };
   /* screens that redraw by themselves would lose what you are typing or the lookups in flight */
-  var STILL = { search: 1, settings: 1, discover: 1, t: 1 };
+  var STILL = { search: 1, settings: 1, discover: 1, browse: 1, t: 1 };
 
   function parseRoute() {
     var raw = (location.hash || "#/").slice(1);
@@ -756,6 +1059,7 @@
       case "done": viewList(main, "done"); break;
       case "search": viewSearch(main, r.query); break;
       case "discover": viewDiscover(main); break;
+      case "browse": viewBrowse(main, r.query); break;
       case "t":
         if (/^(tv|movie)$/.test(r.args[0]) && /^\d+$/.test(r.args[1] || "")) viewTitle(main, r.args[0], r.args[1]);
         else viewMissing(main);
