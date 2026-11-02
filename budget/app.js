@@ -1163,7 +1163,7 @@
         var inp = h("input", { class: "inline-input", inputmode: "decimal", value: String(Calc.num(e.standard)), "aria-label": e.name + " standard", "data-env": e.id });
         inp.addEventListener("input", total);
         inputs[e.id] = inp;
-        list.appendChild(h("div", { class: "row" }, h("div", { class: "row-main" }, h("span", { class: "row-title" }, e.name), h("span", { class: "row-sub" }, g + (e.ends_on ? ", ends " + Calc.monthLabel(e.ends_on) : ""))), inp));
+        list.appendChild(h("div", { class: "row" }, h("div", { class: "row-main" }, h("span", { class: "row-title" }, e.name), h("span", { class: "row-sub" }, g + (e.ends_on ? ", ends " + Calc.monthLabel(e.ends_on) : "")), suggestLine(e, Calc.addMonths(M, 1), inp, total)), inp));
       });
       std.appendChild(list);
     });
@@ -1214,7 +1214,7 @@
         var inp = h("input", { class: "inline-input", inputmode: "decimal", value: String(Calc.num(b[e.id])), "aria-label": e.name, disabled: closed });
         inp.addEventListener("input", total);
         inputs[e.id] = inp;
-        list.appendChild(h("div", { class: "row" }, h("div", { class: "row-main" }, h("span", { class: "row-title" }, e.name), h("span", { class: "row-sub" }, "Standard " + money(e.standard))), inp));
+        list.appendChild(h("div", { class: "row" }, h("div", { class: "row-main" }, h("span", { class: "row-title" }, e.name), h("span", { class: "row-sub" }, "Standard " + money(e.standard)), suggestLine(e, m, inp, total)), inp));
       });
       main.appendChild(section(g, list));
     });
@@ -1349,6 +1349,7 @@
     var active = select([{ value: "yes", label: "Shown" }, { value: "no", label: "Hidden" }], e.active || "yes", { id: "e-active" });
     var inHousehold = select([{ value: "", label: "No" }, { value: "yes", label: "Yes: name, balance and spending this month" }], e.household || "", { id: "e-household" });
     var nameAr = h("input", { class: "field-input", type: "text", dir: "rtl", value: e.name_ar || "", id: "e-name-ar", placeholder: "Optional" });
+    var inCar = select([{ value: "", label: "No" }, { value: "fuel", label: "Fuel: fill-ups post here" }, { value: "service", label: "Maintenance: services post here" }], e.car || "", { id: "e-car" });
 
     main.appendChild(field("Name", name));
     if (kind) main.appendChild(field("Kind", kind));
@@ -1400,6 +1401,7 @@
     main.appendChild(field("Visibility", active));
     main.appendChild(field("Show in Household", inHousehold, "Household shows this envelope's balance to everyone with a Household key. You still post the purchases."));
     main.appendChild(field("Arabic name for Household", nameAr));
+    main.appendChild(field("Car app", inCar, "Fill-ups or services logged in Car post to this envelope, and Car suggests its monthly amount."));
 
     var msg = errorLine();
     main.appendChild(msg);
@@ -1420,6 +1422,7 @@
         home_acct: home.value,
         active: active.value,
         household: inHousehold.value,
+        car: inCar.value,
         name_ar: nameAr.value.trim(),
         on_payday: onPayday ? "yes" : "",
         due_day: k === "bill" && !onPayday && d ? Math.round(d) : null,
@@ -1939,6 +1942,160 @@
         )
       )
     );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  Car: fill-ups and services into the books                        */
+  /* ---------------------------------------------------------------- */
+
+  function carEnv(role) {
+    return activeEnvs().filter(function (e) { return e.car === role; })[0] || null;
+  }
+
+  function carRows(table) {
+    var t = (S.car && S.car.tables[table]) || {};
+    return Object.keys(t).map(function (k) { return t[k]; });
+  }
+
+  function carPayment(table, r, envId) {
+    var fuel = table === "fuel";
+    var note = fuel
+      ? "Fuel, " + Calc.num(r.litres).toFixed(1) + " L at " + Math.round(Calc.num(r.odo)).toLocaleString("en-US") + " km" + (r.note ? ", " + r.note : "")
+      : "Service at " + Math.round(Calc.num(r.odo)).toLocaleString("en-US") + " km" + (r.place ? ", " + r.place : "");
+    return { id: (fuel ? "car-fuel-" : "car-svc-") + r.id, date: String(r.date).slice(0, 10), env: envId, acct: "", amount: Calc.r2(Calc.num(r.cost)), label: "", note: note, kind: "spend", source: "car" };
+  }
+
+  /*
+   * Fill-ups and services from Car post to the envelopes marked for them.
+   * A fill-up the bank's message already logged (same envelope, same
+   * amount, within a day) is linked to it instead, so it counts once.
+   * Fill-ups the bank logged first are listed in Car to add their km.
+   */
+  function postCarEntries() {
+    if (!S.car || !S.syncedOnce || !S.carSynced || !hasBooks()) return;
+    var now = new Date().toISOString();
+    var pays = [];
+    var marks = [];
+    var used = {};
+    ["fuel", "services"].forEach(function (t) {
+      carRows(t).forEach(function (r) { if (r.budget_ref && !r.del) used[r.budget_ref] = r.id; });
+    });
+    ["fuel", "services"].forEach(function (table) {
+      var envRow = carEnv(table === "fuel" ? "fuel" : "service");
+      carRows(table).forEach(function (r) {
+        var payId = (table === "fuel" ? "car-fuel-" : "car-svc-") + r.id;
+        var existing = S.hub.get("payments", payId);
+        var open = function (p) { return statusOf(Calc.monthOf(Calc.dateOf(p))) !== "closed"; };
+        if (r.del) {
+          if (existing && open(existing)) pays.push({ id: payId, del: now });
+          if ((existing || r.budget === "remove") && r.budget !== "removed") marks.push({ table: table, row: { id: r.id, budget: "removed" } });
+          return;
+        }
+        if (r.budget === "linked") return;
+        /* already posted: keep the payment in step with the entry (a device that had not heard it was posted may have cleared the mark) */
+        if (existing) {
+          var np = carPayment(table, r, existing.env);
+          if (open(existing) && (Calc.num(existing.amount) !== np.amount || Calc.dateOf(existing) !== np.date || existing.note !== np.note)) {
+            pays.push({ id: payId, amount: np.amount, date: np.date, note: np.note });
+          }
+          if (r.budget !== "posted" || r.budget_ref !== payId) marks.push({ table: table, row: { id: r.id, budget: "posted", budget_ref: payId } });
+          return;
+        }
+        if (!envRow || !(Calc.num(r.cost) > 0) || (r.budget && r.budget !== "none" && r.budget !== "update")) return;
+        var d = String(r.date).slice(0, 10);
+        if (statusOf(Calc.monthOf(d)) === "closed") return;
+        var amount = Calc.r2(Calc.num(r.cost));
+        var same = S.data.payments.filter(function (x) {
+          if (x.source === "car" || used[x.id] || envOfPayment(x) !== envRow.id) return false;
+          return Math.abs(Calc.num(x.amount) - amount) < 0.01 && Math.abs(Calc.daysBetween(Calc.dateOf(x), d)) <= 1;
+        })[0];
+        if (same) {
+          used[same.id] = r.id;
+          marks.push({ table: table, row: { id: r.id, budget: "linked", budget_ref: same.id, posted: now } });
+          return;
+        }
+        var pay = carPayment(table, r, envRow.id);
+        pays.push(pay);
+        marks.push({ table: table, row: { id: r.id, budget: "posted", budget_ref: pay.id, posted: now } });
+      });
+    });
+
+    /* fuel the bank logged that has no fill-up in Car yet */
+    var fuelEnv = carEnv("fuel");
+    var start = String((S.car.get("settings", "delivered") || {}).value || "").slice(0, 10) || Calc.ymd(new Date(Date.now() - 60 * 86400000));
+    var bank = {};
+    carRows("bank").forEach(function (b) { bank[b.id] = b; });
+    var want = {};
+    if (fuelEnv) {
+      S.data.payments.forEach(function (p) {
+        if (p.source !== "sms" || envOfPayment(p) !== fuelEnv.id || Calc.dateOf(p) < start || used[p.id] || Calc.num(p.amount) <= 0) return;
+        want["b-" + p.id] = p;
+      });
+    }
+    Object.keys(want).forEach(function (id) {
+      var p = want[id];
+      if (bank[id] && !bank[id].del) return;
+      marks.push({ table: "bank", row: { id: id, ref: p.id, date: Calc.dateOf(p), amount: Calc.r2(Calc.num(p.amount)), merchant: p.note || "", done: "" } });
+    });
+    Object.keys(bank).forEach(function (id) {
+      var b = bank[id];
+      if (b.del || b.done || want[id]) return;
+      marks.push({ table: "bank", row: { id: id, done: now } });
+    });
+    if (pays.length) S.hub.putMany(pays.map(function (x) { return { table: "payments", row: x }; }));
+    if (marks.length) S.car.putMany(marks);
+    if (pays.length) refresh();
+  }
+
+  /* the car envelopes' balances, for the Car app */
+  function shareCarEnvelopes() {
+    if (!S.car || !S.syncedOnce || !S.carSynced || !hasBooks()) return;
+    var M = S.model.current;
+    var mo = S.model.byMonth[M];
+    if (!mo) return;
+    var now = new Date().toISOString();
+    var want = {};
+    activeEnvs().forEach(function (e) {
+      if (e.car !== "fuel" && e.car !== "service") return;
+      var o = mo.env[e.id] || { left: 0, spent: 0, received: 0 };
+      want[e.id] = { id: e.id, name: e.name, role: e.car, left: Calc.r2(o.left), spent: Calc.r2(o.spent - (o.received || 0)), month: M };
+    });
+    var writes = [];
+    Object.keys(want).forEach(function (id) {
+      var have = S.car.get("envelopes", id);
+      var same = have && ["name", "role", "left", "spent", "month"].every(function (k) { return String(have[k]) === String(want[id][k]); });
+      if (same && have.updated && Date.parse(now) - Date.parse(have.updated) < 3600000) return;
+      writes.push({ table: "envelopes", row: Object.assign({ updated: now }, want[id]) });
+    });
+    S.car.all("envelopes").forEach(function (row) {
+      if (!want[row.id]) writes.push({ table: "envelopes", row: { id: row.id, del: now } });
+    });
+    if (writes.length) S.car.putMany(writes);
+  }
+
+  /** What Car suggests for an envelope in a month: { amount, note } or null. */
+  function carSuggest(e, m) {
+    if (!S.car || !window.CarCalc || (e.car !== "fuel" && e.car !== "service")) return null;
+    var d = {};
+    ["settings", "fuel", "services", "odo"].forEach(function (t) { d[t] = S.car.all(t); });
+    var r = Calc.range(m);
+    var t = today();
+    if (e.car === "fuel") {
+      var f = CarCalc.fuelFor(d, Calc.daysBetween(r.start, r.end) + 1, t);
+      return f ? { amount: f.amount, note: "about " + f.km.toLocaleString("en-US") + " km" + (f.fromSticker ? ", sticker km a litre" : "") } : null;
+    }
+    var mt = CarCalc.maintenanceFor(d, t, r.start, r.end);
+    if (!mt.dated) return null;
+    return { amount: mt.monthly, note: "saved monthly" + (mt.due ? ", " + money(mt.due) + " due this month" : "") + (mt.unknown.length ? ", some prices missing" : "") };
+  }
+
+  function suggestLine(e, m, inp, onSet) {
+    var sg = carSuggest(e, m);
+    if (!sg) return null;
+    return h("button", { type: "button", class: "btn btn-quiet car-suggest", style: "padding:2px 0;min-height:0;font-size:13px;text-align:left;justify-content:flex-start", onclick: function () {
+      inp.value = String(sg.amount);
+      if (onSet) onSet();
+    } }, "Car suggests " + money(sg.amount) + " (" + sg.note + "). Use it");
   }
 
   function viewTrips(main) {
@@ -2479,19 +2636,37 @@
         refresh();
         postDueBills();
         postOwnTrips();
+        postCarEntries();
         processSms();
         shareEnvelopes();
+        shareCarEnvelopes();
         if (!current || !FORMS[current.name]) render();
       });
       startHousehold();
+      startCar();
       window.addEventListener("hashchange", render);
       render();
     },
     onWho: function () {
       startHousehold();
+      startCar();
       if (!current || !FORMS[current.name]) render();
     },
   });
+
+  /* Car's fill-ups and services post here, on keys that open both apps */
+  function startCar() {
+    if (S.car || !Kit.canUse("car")) return;
+    S.car = new Hub("car");
+    var last = S.car.state;
+    S.car.on(function () {
+      if (last === "syncing" && S.car.state === "idle") S.carSynced = true;
+      last = S.car.state;
+      postCarEntries();
+      shareCarEnvelopes();
+    });
+    S.car.start();
+  }
 
   /* Household's trips wait here for review, on keys that open both apps */
   function startHousehold() {

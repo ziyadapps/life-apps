@@ -449,7 +449,8 @@
         var linked = ctx.linked || {};
         var found = (ctx.payments || []).filter(function (x) {
           if (x.del || linked[x.id] || x.source === "sms") return false;
-          var inAcct = x.acct === src.id || heldIds.indexOf(x.env) >= 0;
+          /* a fill-up or service from Car counts whichever card paid it */
+          var inAcct = x.acct === src.id || heldIds.indexOf(x.env) >= 0 || x.source === "car";
           return inAcct && same(Math.abs(Number(x.amount)), amount) && near(Calc.dateOf(x), date, 2);
         })[0];
         if (found) return { status: "match", ref: found.id };

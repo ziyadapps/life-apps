@@ -10,7 +10,7 @@
 
   var h = Kit.h;
   var BUDGET_TABLES = ["envelopes", "accounts", "splits", "months", "budgets", "payments", "moves", "reserves", "reserve_moves", "planned", "settings"];
-  var S = { budget: null, household: null, main: null };
+  var S = { budget: null, household: null, car: null, main: null };
 
   function today() {
     return Calc.ymd(new Date());
@@ -189,6 +189,30 @@
   }
 
   /* ---------------------------------------------------------------- */
+  /*  car                                                              */
+  /* ---------------------------------------------------------------- */
+
+  /* what the car needs: a service coming up, a date, a fill-up from the bank */
+  function carCard(main) {
+    if (!S.car || !window.CarCalc) return;
+    var d = {};
+    ["settings", "fuel", "services", "odo", "bank"].forEach(function (t) { d[t] = S.car.all(t); });
+    if (!d.fuel.length && !d.settings.length) return;
+    var alerts = CarCalc.alerts(d, today());
+    if (!alerts.length) return;
+    var wrap = h("div", { class: "lines" });
+    alerts.forEach(function (a) { wrap.appendChild(line(a.text, null, a.sub, a.tone)); });
+    main.appendChild(card("Car", wrap, "../car/"));
+  }
+
+  function startCar() {
+    if (S.car || !Kit.canUse("car")) return;
+    S.car = new Hub("car");
+    S.car.on(render);
+    S.car.start();
+  }
+
+  /* ---------------------------------------------------------------- */
   /*  page                                                             */
   /* ---------------------------------------------------------------- */
 
@@ -202,7 +226,7 @@
     moneyCards(main);
     tripsCard(main);
     listCard(main);
-    main.appendChild(h("p", { class: "note", style: "margin-top:18px" }, "Subscriptions and the car log will show here once they are built."));
+    carCard(main);
   }
 
   Kit.start({
@@ -217,6 +241,7 @@
         S.household.on(render);
         S.household.start();
       }
+      startCar();
       render();
       /* a new day, or a return to the app, redraws */
       document.addEventListener("visibilitychange", function () {
@@ -229,6 +254,7 @@
         S.household.on(render);
         S.household.start();
       }
+      startCar();
       render();
     },
   });

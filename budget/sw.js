@@ -1,9 +1,10 @@
 self.SHELL_APP = "budget";
-self.SHELL_VERSION = "8"; // bump this when any file below changes
+self.SHELL_VERSION = "9"; // bump this when any file below changes
 self.SHELL_FILES = [
   "./",
   "./budget.css",
   "./calc.js",
+  "../car/calc.js",
   "./sms.js",
   "./v1-ledger.js",
   "./migrate.js",
