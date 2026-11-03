@@ -1,5 +1,5 @@
 self.SHELL_APP = "budget";
-self.SHELL_VERSION = "9"; // bump this when any file below changes
+self.SHELL_VERSION = "11"; // bump this when any file below changes
 self.SHELL_FILES = [
   "./",
   "./budget.css",

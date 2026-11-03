@@ -491,3 +491,28 @@ textarea.field-input {
   font-size: 14px;
 }
 .check-line input { width: 20px; height: 20px; }
+
+/* ---- planned purchases ----------------------------------------- */
+
+.buy-row {
+  gap: 10px;
+}
+
+.buy-move {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.buy-move .btn {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.buy-move .btn[disabled] {
+  opacity: 0.25;
+}
+
+.row-sub[data-tone="good"] { color: var(--good); }
+.row-sub[data-tone="bad"] { color: var(--bad); }

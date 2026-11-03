@@ -642,6 +642,43 @@
     };
   }
 
+  /* ---------------------------------------------------------------- */
+  /*  planned purchases                                                */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * A list of things to buy from one envelope, in your order. What is saved
+   * now pays for them from the top; the monthly amount arrives each payday
+   * for the rest. Each item comes back with:
+   *   state   ready (affordable now) | later (paydays away) | stuck (nothing goes in each month)
+   *   months  paydays until it is affordable; date: that payday
+   *   late    it will not be ready by the date you want it; needMonthly: the monthly amount that would make it
+   */
+  function purchasePlan(items, saved, monthly, month) {
+    var cum = 0;
+    saved = num(saved);
+    monthly = num(monthly);
+    return items.map(function (it) {
+      cum = r2(cum + num(it.price));
+      var out = { item: it, cum: cum, state: "ready", months: 0, date: null, late: false, needMonthly: null };
+      var need = r2(cum - saved);
+      if (need > 0) {
+        if (monthly > 0) {
+          out.state = "later";
+          out.months = Math.ceil(need / monthly - 1e-9);
+          out.date = range(addMonths(month, out.months)).start;
+        } else out.state = "stuck";
+      }
+      if (it.by && out.state !== "ready") {
+        var k = 0;
+        while (k < 600 && range(addMonths(month, k + 1)).start <= it.by) k++;
+        out.late = out.state === "stuck" || out.date > it.by;
+        if (out.late) out.needMonthly = k ? Math.ceil(need / k) : null;
+      }
+      return out;
+    });
+  }
+
   var Calc = {
     KINDS: KINDS,
     ymd: ymd,
@@ -670,6 +707,7 @@
     subsByEnv: subsByEnv,
     subsMonthly: subsMonthly,
     transferSheet: transferSheet,
+    purchasePlan: purchasePlan,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = Calc;

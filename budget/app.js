@@ -12,7 +12,7 @@
   var TABLES = [
     "envelopes", "accounts", "splits", "months", "budgets", "payments",
     "moves", "reconciles", "reserves", "reserve_moves", "planned", "labels", "settings",
-    "subs", "sms", "memory",
+    "subs", "sms", "memory", "purchases",
   ];
   var GROUPS = ["Living", "Bills", "Committed", "Funds"];
   var KIND_NAMES = { spending: "Spending", bill: "Bill", fund: "Fund", remaining: "Remaining" };
@@ -527,11 +527,22 @@
       )
     );
 
-    if (e.kind === "bill" || e.kind === "spending") {
-      var subs = subsOf(id);
+    /* the same for planned purchases */
+    var wants = purchasesOf(id);
+    if (wants.length) {
+      var first = purchasePlanOf(id).rows[0];
+      main.appendChild(h("div", { class: "list", style: "margin-top:12px" }, h("a", { class: "row-link", href: "#/buy/" + id, id: "buy-link" },
+        h("div", { class: "row-main" }, h("span", { class: "row-title" }, "Planned purchases (" + wants.length + ")"),
+          h("span", { class: "row-sub" }, "Next: " + first.item.name + ", " + planText(first).replace(/^About /, "about ").replace("Ready now", "ready now"))),
+        chevron())));
+    }
+
+    /* only an envelope that has a subscriptions list shows it; one is started from Settings */
+    var subs = subsOf(id);
+    if (subs.length) {
       var sl = h("a", { class: "row-link", href: "#/subs/" + id, id: "subs-link" },
-        h("div", { class: "row-main" }, h("span", { class: "row-title" }, subs.length ? "Subscriptions (" + subs.length + ")" : "Subscriptions list"),
-          h("span", { class: "row-sub" }, subs.length ? money(Calc.subsMonthly(subs).perMonth) + " a month, each posts on its own day" : "For an envelope paid in several charges through the month")),
+        h("div", { class: "row-main" }, h("span", { class: "row-title" }, "Subscriptions (" + subs.length + ")"),
+          h("span", { class: "row-sub" }, money(Calc.subsMonthly(subs).perMonth) + " a month, each posts on its own day")),
         chevron());
       main.appendChild(h("div", { class: "list", style: "margin-top:12px" }, sl));
     }
@@ -1402,6 +1413,12 @@
     main.appendChild(field("Show in Household", inHousehold, "Household shows this envelope's balance to everyone with a Household key. You still post the purchases."));
     main.appendChild(field("Arabic name for Household", nameAr));
     main.appendChild(field("Car app", inCar, "Fill-ups or services logged in Car post to this envelope, and Car suggests its monthly amount."));
+    if (!isNew && e.kind !== "remaining" && !purchasesOf(id).length) {
+      main.appendChild(field("Planned purchases", h("a", { class: "btn", href: "#/buy/" + id, id: "buy-start", style: "text-decoration:none" }, "Start a planned purchases list"), "Things to buy from this envelope, in order. Shows when each one will be affordable."));
+    }
+    if (!isNew && (e.kind === "bill" || e.kind === "spending") && !subsOf(id).length) {
+      main.appendChild(field("Subscriptions list", h("a", { class: "btn", href: "#/subs/" + id, id: "subs-start", style: "text-decoration:none" }, "Start a subscriptions list"), "For an envelope paid in several charges through the month, each on its own day."));
+    }
 
     var msg = errorLine();
     main.appendChild(msg);
@@ -2180,6 +2197,163 @@
     return { paid: null, text: d ? "Due " + Calc.dayLabel(d) : "Not this month" };
   }
 
+  /* ---------------------------------------------------------------- */
+  /*  Planned purchases                                                */
+  /* ---------------------------------------------------------------- */
+
+  function purchasesOf(envId, bought) {
+    return (S.data.purchases || [])
+      .filter(function (p) { return p.env === envId && (bought ? p.status === "bought" : p.status !== "bought"); })
+      .sort(function (a, b) {
+        if (bought) return String(b.bought || "").localeCompare(String(a.bought || ""));
+        return Calc.num(a.order) - Calc.num(b.order) || String(a.added || "").localeCompare(String(b.added || ""));
+      });
+  }
+
+  /** The envelope's plan: what is saved now and what goes in each month pay for the list from the top. */
+  function purchasePlanOf(envId) {
+    var e = env(envId);
+    var M = S.model.current;
+    var mo = S.model.byMonth[M];
+    var saved = mo && mo.env[envId] ? mo.env[envId].left : 0;
+    var monthly = Calc.num(e.standard);
+    return { saved: saved, monthly: monthly, rows: Calc.purchasePlan(purchasesOf(envId), saved, monthly, M) };
+  }
+
+  function planText(r) {
+    if (r.state === "ready") return "Ready now";
+    if (r.state === "stuck") return "Nothing goes in each month: set the standard month in Plan";
+    var t = "About " + Calc.monthLabel(Calc.monthOf(r.date)) + (r.months === 1 ? ", next payday" : ", in " + r.months + " paydays");
+    if (r.late) t += ". Late for " + Calc.dayLabel(r.item.by) + (r.needMonthly ? ": needs " + money(r.needMonthly) + " a month" : "");
+    return t;
+  }
+
+  function viewBuy(main, envId) {
+    var e = env(envId);
+    if (!e) return viewMissing(main);
+    main.appendChild(back(e.name, "/env/" + envId));
+    main.appendChild(h("div", null, title("Planned purchases", "From " + e.name + ", in your order. What is saved pays for the top of the list; each payday's amount goes toward the next.")));
+    var p = purchasePlanOf(envId);
+    var total = p.rows.length ? p.rows[p.rows.length - 1].cum : 0;
+    var sum = h("div", { class: "list", id: "buy-summary" });
+    sum.appendChild(kv("Saved now", money(p.saved)));
+    sum.appendChild(kv("Goes in each month", money(p.monthly)));
+    sum.appendChild(kv("The whole list", money(total)));
+    var last = p.rows[p.rows.length - 1];
+    if (last) sum.appendChild(kv("Everything bought by", last.state === "ready" ? "Now" : last.state === "stuck" ? "Not with nothing going in" : Calc.monthLabel(Calc.monthOf(last.date))));
+    main.appendChild(sum);
+
+    var list = h("div", { class: "list", id: "buy-list", style: "margin-top:12px" });
+    if (!p.rows.length) list.appendChild(h("div", { class: "empty" }, "Nothing on the list yet."));
+    p.rows.forEach(function (r, i) {
+      var it = r.item;
+      var move = function (d) {
+        var items = purchasesOf(envId);
+        var j = i + d;
+        if (j < 0 || j >= items.length) return;
+        var t = items[i];
+        items[i] = items[j];
+        items[j] = t;
+        S.hub.putMany(items.map(function (x, n) { return { table: "purchases", row: { id: x.id, order: n + 1 } }; }));
+        render();
+      };
+      list.appendChild(h("div", { class: "row buy-row", "data-buy": it.id },
+        h("div", { class: "buy-move" },
+          h("button", { type: "button", class: "btn btn-quiet", "aria-label": "Move up", disabled: i === 0, onclick: function () { move(-1); } }, "▲"),
+          h("button", { type: "button", class: "btn btn-quiet", "aria-label": "Move down", disabled: i === p.rows.length - 1, onclick: function () { move(1); } }, "▼")),
+        h("a", { class: "row-main", href: "#/buyitem/" + it.id, style: "color:inherit;text-decoration:none" },
+          h("span", { class: "row-title" }, it.name),
+          h("span", { class: "row-sub", "data-tone": r.late ? "bad" : r.state === "ready" ? "good" : null }, planText(r))),
+        amountText(it.price)));
+    });
+    main.appendChild(list);
+    main.appendChild(h("div", { class: "btn-row", style: "margin-top:10px" }, h("a", { class: "btn btn-primary", href: "#/buyitem/new?env=" + envId, id: "buy-add", style: "text-decoration:none" }, "Add something")));
+    if (Calc.r2(p.monthly) <= 0 && p.rows.length) main.appendChild(h("p", { class: "note" }, "This envelope gets nothing each month yet. Set its standard month in Plan."));
+
+    var done = purchasesOf(envId, true).slice(0, 20);
+    if (done.length) {
+      var dl = h("div", { class: "list", id: "buy-done" });
+      done.forEach(function (it) {
+        dl.appendChild(h("div", { class: "row", "data-buy": it.id },
+          h("div", { class: "row-main" }, h("span", { class: "row-title" }, it.name), h("span", { class: "row-sub" }, "Bought " + Calc.dayLabel(it.bought) + " for " + money(it.paid))),
+          Kit.confirmButton("Undo", "Tap again", function () {
+            var pay = it.ref ? S.hub.get("payments", it.ref) : null;
+            if (pay && statusOf(Calc.monthOf(Calc.dateOf(pay))) === "closed") { Kit.toast("That month is closed."); return; }
+            if (pay) S.hub.remove("payments", pay.id);
+            S.hub.put("purchases", { id: it.id, status: "", bought: "", paid: "", ref: "" });
+            render();
+          }, "btn btn-quiet")));
+      });
+      main.appendChild(section("Bought", dl));
+    }
+  }
+
+  function viewBuyItem(main, id, query) {
+    var isNew = id === "new";
+    var it = isNew ? { env: query.env || "" } : (S.data.purchases || []).filter(function (x) { return x.id === id; })[0];
+    if (!it || !env(it.env)) return viewMissing(main);
+    var e = env(it.env);
+    main.appendChild(back("Planned purchases", "/buy/" + it.env));
+    main.appendChild(h("h1", { class: "page-title" }, isNew ? "Add something to buy" : it.name));
+    var name = h("input", { class: "field-input", type: "text", id: "buy-name", value: it.name || "", placeholder: "What it is" });
+    var price = numberInput(it.price, { id: "buy-price", placeholder: "0.00" });
+    var by = h("input", { class: "field-input", type: "date", id: "buy-by", value: it.by || "" });
+    var note = h("input", { class: "field-input", type: "text", id: "buy-note", value: it.note || "", placeholder: "Optional: where, which model, a link" });
+    main.appendChild(field("Name", name));
+    main.appendChild(h("div", { class: "two" }, field("Price", price), field("Wanted by", by)));
+    main.appendChild(h("p", { class: "note", style: "margin-top:-4px" }, "Wanted by is optional. When set, the list says if it will be late and what a month it would need."));
+    main.appendChild(field("Note", note));
+    var msg = errorLine();
+    main.appendChild(msg);
+    main.appendChild(h("div", { class: "save-bar" }, primary(isNew ? "Add to the list" : "Save", function () {
+      var nm = name.value.trim();
+      var n = readNumber(price);
+      if (!nm) { msg.textContent = "Give it a name."; return; }
+      if (n === null || isNaN(n) || n <= 0) { msg.textContent = "Type the price, more than 0."; return; }
+      var row = { env: it.env, name: nm, price: n, by: by.value || "", note: note.value.trim() };
+      if (isNew) {
+        row.order = purchasesOf(it.env).length + 1;
+        row.added = new Date().toISOString();
+        row.status = "";
+      } else row.id = it.id;
+      S.hub.put("purchases", row);
+      Kit.toast(nm + (isNew ? " added" : " saved"));
+      go("/buy/" + it.env);
+    }, "buy-save")));
+    main.querySelector(".save-bar button").id = "buy-save";
+    if (isNew || it.status === "bought") return;
+
+    /* bought it: the payment comes out of the envelope */
+    var amount = numberInput(Calc.num(it.price).toFixed(2), { id: "buy-paid" });
+    var date = h("input", { class: "field-input", type: "date", id: "buy-date", value: today() });
+    var acctSel = select(acctOptions(true, "The envelope's own account"), "", { id: "buy-acct", "aria-label": "Account" });
+    var bmsg = errorLine();
+    var p = purchasePlanOf(it.env);
+    var mine = p.rows.filter(function (r) { return r.item.id === it.id; })[0];
+    main.appendChild(section("Bought it", h("div", null,
+      mine && mine.state !== "ready" ? h("p", { class: "note", style: "margin-top:0" }, "Not fully saved for yet: " + e.name + " has " + money(p.saved) + ". Buying it now leaves less for the rest of the list.") : null,
+      h("div", { class: "two" }, field("Paid", amount), field("Date", date)),
+      field("Paid from", acctSel),
+      bmsg,
+      h("div", { class: "btn-row" }, h("button", { type: "button", class: "btn btn-primary", id: "buy-bought", onclick: function () {
+        var n = readNumber(amount);
+        if (n === null || isNaN(n) || n <= 0) { bmsg.textContent = "Type what you paid."; return; }
+        var d = date.value || today();
+        if (statusOf(Calc.monthOf(d)) === "closed") { bmsg.textContent = Calc.monthLabel(Calc.monthOf(d)) + " is closed. Change the date."; return; }
+        var pid = "buy-" + it.id;
+        S.hub.putMany([
+          { table: "payments", row: { id: pid, date: d, env: it.env, acct: acctSel.value, amount: n, label: "", note: it.name, kind: "spend", source: "plan" } },
+          { table: "purchases", row: { id: it.id, status: "bought", bought: d, paid: n, ref: pid } },
+        ]);
+        Kit.toast("Bought " + it.name + ". " + money(n) + " from " + e.name);
+        go("/buy/" + it.env);
+      } }, "Mark as bought")))));
+    main.appendChild(h("div", { class: "btn-row", style: "margin-top:12px" }, Kit.confirmButton("Delete", "Tap again to delete", function () {
+      S.hub.remove("purchases", it.id);
+      go("/buy/" + it.env);
+    })));
+  }
+
   function viewSubs(main, envId) {
     var e = env(envId);
     if (!e) return viewMissing(main);
@@ -2544,7 +2718,7 @@
   /* ---------------------------------------------------------------- */
 
   /* screens with inputs are not redrawn when a sync lands, so typing is never lost */
-  var FORMS = { add: 1, move: 1, payday: 1, "payday-acct": 1, plan: 1, month: 1, "edit-env": 1, "edit-acct": 1, reserves: 1, import: 1, env: 1, acct: 1, setup: 1, trips: 1, inbox: 1, sub: 1 };
+  var FORMS = { add: 1, move: 1, payday: 1, "payday-acct": 1, plan: 1, month: 1, "edit-env": 1, "edit-acct": 1, reserves: 1, import: 1, env: 1, acct: 1, setup: 1, trips: 1, inbox: 1, sub: 1, buyitem: 1 };
 
   function parseRoute() {
     var raw = (location.hash || "#/").slice(1);
@@ -2590,6 +2764,8 @@
       case "inbox": viewInbox(main); break;
       case "subs": viewSubs(main, a[0]); break;
       case "sub": viewSub(main, a[0], r.query); break;
+      case "buy": viewBuy(main, a[0]); break;
+      case "buyitem": viewBuyItem(main, a[0], r.query); break;
       default: viewMissing(main);
     }
     paintTabs(r.name);
@@ -2612,7 +2788,7 @@
   }
 
   function paintTabs(name) {
-    var owner = { "": "", env: "", accounts: "accounts", acct: "accounts", plan: "plan", month: "plan", more: "more", setup: "more", "edit-env": "more", "edit-acct": "more", reserves: "more", history: "more", import: "more", payday: "", "payday-acct": "", trips: "", inbox: "", subs: "", sub: "" }[name];
+    var owner = { "": "", env: "", accounts: "accounts", acct: "accounts", plan: "plan", month: "plan", more: "more", setup: "more", "edit-env": "more", "edit-acct": "more", reserves: "more", history: "more", import: "more", payday: "", "payday-acct": "", trips: "", inbox: "", subs: "", sub: "", buy: "", buyitem: "" }[name];
     Object.keys(tabEls).forEach(function (k) {
       if (k === "add") return;
       if (k === owner) tabEls[k].setAttribute("aria-current", "page");
