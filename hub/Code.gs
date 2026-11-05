@@ -25,7 +25,7 @@
 
 /* Bump this whenever you paste in a new copy. Apps read it back from the
    published address, which proves the address serves the code you saved. */
-const VERSION = "2026-11-02b";
+const VERSION = "2026-11-05a";
 
 const TZ = "Asia/Riyadh";
 const APPS_FOLDER = "Life apps";
@@ -380,14 +380,49 @@ function ping_(key) {
  * With no cursor, the whole app comes back, deleted rows included, so a new
  * device starts complete.
  */
+/*
+ * Opening an app usually finds nothing new. The hub notes when it last wrote
+ * to each app, so it can say so without opening the app's sheet at all. A
+ * full read still happens at least every few hours, to catch changes typed
+ * straight into a sheet.
+ */
+const FULL_READ_HOURS = 3;
+
+function markWrite_(app, ts) {
+  try {
+    PropertiesService.getScriptProperties().setProperty("W_" + app, ts);
+  } catch (err) {}
+}
+
 function pull_(key, req) {
   const app = appName_(req);
   allowedApp_(key, app);
   const since = String(req.since || "");
-  const from = since ? new Date(Date.parse(since) - PULL_OVERLAP_MS).toISOString() : "";
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  if (since) {
+    const props = PropertiesService.getScriptProperties();
+    const wrote = props.getProperty("W_" + app) || "";
+    const read = props.getProperty("R_" + app) || "";
+    const fresh = read && Date.now() - Date.parse(read) < FULL_READ_HOURS * 3600000;
+    /* the device already has the last write, and a full read has happened since it */
+    if (wrote && fresh && wrote <= since && read > wrote) {
+      return { ok: true, app: app, cursor: since, tables: {}, quick: true };
+    }
+  }
+  const out = pullAll_(app, since);
   try {
+    PropertiesService.getScriptProperties().setProperty("R_" + app, stamp_(new Date()));
+  } catch (err) {}
+  return out;
+}
+
+/*
+ * Reads take no lock, so the apps that open together (Budget with Household
+ * and Car) are answered side by side. A read that lands in the middle of a
+ * write is safe: the overlap on the cursor brings those rows again next time.
+ */
+function pullAll_(app, since) {
+  const from = since ? new Date(Date.parse(since) - PULL_OVERLAP_MS).toISOString() : "";
+  {
     const ss = appSheet_(app);
     const out = {};
     let cursor = since;
@@ -403,8 +438,6 @@ function pull_(key, req) {
       });
     });
     return { ok: true, app: app, cursor: cursor, tables: out };
-  } finally {
-    lock.releaseLock();
   }
 }
 
@@ -577,6 +610,7 @@ function writeRows_(app, items, insertOnly) {
         if (appends.length) writeBlock_(sh, t.rows.length - appends.length + 2, appends, formats);
       }
     });
+    if (written) markWrite_(app, ts);
     return { ts: ts, written: written };
   } finally {
     lock.releaseLock();

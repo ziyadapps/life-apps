@@ -298,6 +298,33 @@
     return null;
   }
 
+  /** Where spending "should" be today if the month's money were spread evenly: { share (0..1), expected } */
+  function paceOf(M, avail, spent) {
+    if (!(avail > 0)) return null;
+    var r = Calc.range(M);
+    var total = Calc.daysBetween(r.start, r.end) + 1;
+    var gone = Math.min(total, Math.max(0, Calc.daysBetween(r.start, today()) + 1));
+    var share = gone / total;
+    return { share: share, expected: Calc.r2(avail * share) };
+  }
+
+  /** Nothing left to do this month: a bill that is paid or not due, or an envelope with no money and no spending. */
+  function settled(e, mo, M) {
+    var o = mo.env[e.id] || { left: 0, budget: 0, spent: 0, carry: 0, moved: 0, received: 0, opening: 0 };
+    if (Math.abs(o.left) >= 0.005) return false;
+    if (e.kind === "bill") return true;
+    var avail = o.carry + o.opening + o.budget + Math.max(o.moved, 0) + o.received;
+    return avail < 0.005 && o.spent < 0.005;
+  }
+
+  function showSettled(v) {
+    try {
+      if (v === undefined) return localStorage.getItem("lifeapps.budget.settled") === "open";
+      localStorage.setItem("lifeapps.budget.settled", v ? "open" : "");
+    } catch (err) {}
+    return !!v;
+  }
+
   function envRow(e, mo, M) {
     var o = mo.env[e.id] || { left: 0, budget: 0, spent: 0, carry: 0, moved: 0, received: 0, opening: 0 };
     var sub = "";
@@ -321,8 +348,14 @@
     } else {
       sub = "Spent " + money(o.spent) + " of " + money(avail);
       bar = avail > 0 ? Math.max(0, Math.min(1, o.spent / avail)) : o.spent > 0 ? 1 : 0;
+      var pace = paceOf(M, avail, o.spent);
+      if (pace && M === S.model.current) {
+        var gap = Calc.r2(o.spent - pace.expected);
+        sub += gap > 1 ? " · " + money(gap) + " over pace" : " · on pace";
+        var paceAt = pace.share;
+      }
     }
-    var tone = o.left < 0 ? "bad" : e.kind === "spending" && bar > 0.85 ? "warn" : null;
+    var tone = o.left < 0 ? "bad" : e.kind === "spending" && ((paceAt !== undefined && o.spent - avail * paceAt > 1) || bar > 0.9) ? "warn" : null;
     return h(
       "a",
       { class: "env", href: "#/env/" + e.id },
@@ -332,32 +365,62 @@
         h("span", { class: "env-name" }, e.name),
         h("span", { class: "env-sub" }, sub),
         bar !== null
-          ? h("div", { class: "bar", "data-tone": tone, "aria-hidden": "true" }, h("span", { style: "width:" + Math.round(bar * 100) + "%" }))
+          ? h("div", { class: "bar", "data-tone": tone, "aria-hidden": "true" }, h("span", { style: "width:" + Math.round(bar * 100) + "%" }),
+              paceAt !== undefined ? h("i", { class: "pace", style: "left:" + Math.round(paceAt * 100) + "%" }) : null)
           : null
       ),
       h("span", { class: "env-left" + (o.left < 0 ? " neg" : Math.abs(o.left) < 0.005 ? " zero" : "") }, money(o.left))
     );
   }
 
+  /**
+   * The daily allowance: what is left today, what a day the rest of the
+   * month can really afford, and the last seven days against the limit.
+   */
   function dailyCards(mo, M) {
     var t = today();
+    var r = Calc.range(M);
+    var daysLeft = Math.max(1, Calc.daysBetween(t, r.end) + 1);
+    var spentOn = function (e, d) {
+      return paymentsIn(M, function (p) {
+        return envOfPayment(p) === e.id && Calc.dateOf(p) === d && p.kind !== "opening";
+      }).reduce(function (s, p) { return s + Calc.num(p.amount); }, 0);
+    };
     return activeEnvs()
       .filter(function (e) {
         return Calc.num(e.daily_cap) > 0;
       })
       .map(function (e) {
-        var spent = paymentsIn(M, function (p) {
-          return envOfPayment(p) === e.id && Calc.dateOf(p) === t && p.kind !== "opening";
-        }).reduce(function (s, p) {
-          return s + Calc.num(p.amount);
-        }, 0);
         var cap = Calc.num(e.daily_cap);
+        var spent = spentOn(e, t);
         var left = Calc.r2(cap - spent);
+        var monthLeft = Calc.r2(((mo && mo.env[e.id]) || {}).left || 0);
+        /* what each day to payday can have, today included, from what is left */
+        var perDay = Calc.r2((monthLeft + spent) / daysLeft);
+        var week = [];
+        for (var i = 6; i >= 0; i--) {
+          var d = Calc.ymd(new Date(new Date(t + "T12:00:00").getTime() - i * 86400000));
+          if (d < r.start) continue;
+          week.push({ d: d, spent: Calc.r2(spentOn(e, d)) });
+        }
+        var weekSpent = week.reduce(function (s, x) { return s + x.spent; }, 0);
+        var strip = h("div", { class: "days", "aria-hidden": "true" }, week.map(function (x) {
+          var hgt = Math.min(1, x.spent / cap);
+          return h("div", { class: "day" + (x.d === t ? " today" : "") + (x.spent > cap ? " over" : "") },
+            h("span", { class: "day-bar" }, h("span", { style: "height:" + Math.round(hgt * 100) + "%" })),
+            h("span", { class: "day-name" }, new Date(x.d + "T12:00:00").toLocaleDateString("en-GB", { weekday: "narrow" })));
+        }));
+        var tight = perDay < cap - 0.005;
+        var tone = left < 0 || perDay <= 0 ? "bad" : tight ? "warn" : null;
         return h(
           "a",
-          { class: "banner", href: "#/env/" + e.id, "data-tone": left < 0 ? "bad" : null },
-          h("span", { class: "banner-title" }, e.name + " today: " + money(left) + " left"),
-          h("span", { class: "banner-text" }, "Spent " + money(spent) + " of your " + money(cap) + " a day. " + money((mo.env[e.id] || {}).left || 0) + " left this month.")
+          { class: "banner daily", href: "#/env/" + e.id, "data-tone": tone, id: "daily-" + e.id },
+          h("span", { class: "banner-title" }, e.name + " today: " + money(left) + " left of " + money(cap)),
+          h("span", { class: "banner-text" }, tight
+            ? money(monthLeft) + " left for " + daysLeft + (daysLeft === 1 ? " day" : " days") + ": " + money(perDay) + " a day to make it to payday."
+            : money(monthLeft) + " left for " + daysLeft + (daysLeft === 1 ? " day" : " days") + ": your " + money(cap) + " a day is covered, with " + money(Calc.r2(monthLeft + spent - cap * daysLeft)) + " spare."),
+          h("span", { class: "banner-text" }, "Last " + week.length + " days: " + money(weekSpent) + " of " + money(cap * week.length) + "."),
+          strip
         );
       });
   }
@@ -410,11 +473,17 @@
       );
     }
 
+    var done = [];
     GROUPS.concat(["Other"]).forEach(function (g) {
       var envs = activeEnvs().filter(function (e) {
         if (e.kind === "remaining") return false;
         var eg = GROUPS.indexOf(e.group) >= 0 ? e.group : "Other";
-        return eg === g;
+        if (eg !== g) return false;
+        if (mo && settled(e, mo, M)) {
+          done.push(e);
+          return false;
+        }
+        return true;
       });
       if (g === "Funds" && S.model.index.remaining) envs.push(env(S.model.index.remaining));
       if (!envs.length) return;
@@ -424,6 +493,21 @@
       });
       main.appendChild(section(g, list));
     });
+
+    /* settled envelopes fold away at the bottom; tap to open, remembered on this device */
+    if (done.length) {
+      var open = showSettled();
+      var foldList = h("div", { class: "list", id: "settled-list" });
+      done.forEach(function (e) { foldList.appendChild(envRow(e, mo, M)); });
+      foldList.hidden = !open;
+      var head = h("button", { type: "button", class: "fold", id: "settled-toggle", "aria-expanded": String(open), onclick: function () {
+        var now = foldList.hidden;
+        foldList.hidden = !now;
+        head.setAttribute("aria-expanded", String(now));
+        showSettled(now);
+      } }, h("span", null, "Settled this month (" + done.length + ")"), h("span", { class: "fold-sub" }, done.map(function (e) { return e.name; }).join(", ")));
+      main.appendChild(h("section", { class: "section" }, head, foldList));
+    }
 
     if (mo) {
       main.appendChild(
@@ -2676,7 +2760,24 @@
         S.hub.put("sms", { id: r.id, status: "review", reason: Calc.num(r.amount) && /refund|transfer_in|topup/.test(r.kind) ? "money-in" : "spend", key: r.key || (r.acct && r.merchant ? Sms.memoryKey("merchant", r.acct, r.merchant) : ""), what: r.merchant });
         render();
       };
-    } else if (r.status === "matched") what = r.trip ? "Matched her Household trip, now in Budget" : "Already in your books";
+    } else if (r.status === "matched") {
+      var twin = r.ref ? S.hub.get("payments", r.ref) : null;
+      what = r.trip ? "Matched her Household trip, now in Budget" : "Already in your books" + (twin ? ": " + (twin.note || twin.label || envName(twin.env)) + ", " + Calc.dayLabel(Calc.dateOf(twin)) : "");
+      /* a genuine second purchase of the same amount: log it after all */
+      if (!r.trip && twin && twin.kind !== "bill" && !/^(bill|sub)-/.test(twin.id)) {
+        extra = Kit.confirmButton("Not the same", "Log it too?", function () {
+          var d = String(r.date || Calc.dateOf(twin));
+          if (statusOf(Calc.monthOf(d)) === "closed") { Kit.toast(Calc.monthLabel(Calc.monthOf(d)) + " is closed."); return; }
+          var pid = "sms-" + r.id;
+          S.hub.putMany([
+            { table: "payments", row: { id: pid, date: d, env: twin.env, acct: twin.acct || "", amount: Calc.num(r.amount), label: "", note: r.merchant || "", kind: "spend", source: "sms" } },
+            { table: "sms", row: { id: r.id, status: "posted", ref: pid, env: twin.env, acct: twin.acct || "", notdup: "yes" } },
+          ]);
+          Kit.toast("Logged " + money(r.amount) + " in " + envName(twin.env));
+          render();
+        }, "btn btn-quiet");
+      }
+    }
     else if (r.status === "updated") what = (r.sub ? "Subscription" : "Bill") + (Calc.r2(Calc.num(r.was)) === Calc.r2(Calc.num(r.amount)) ? " confirmed by the bank" : " corrected: " + money(r.amount) + " (it had posted at " + money(r.was) + ")");
     else if (r.status === "move-ok") what = "Between your accounts";
     else if (r.status === "duplicate") what = "Same message twice";

@@ -1,5 +1,5 @@
 self.SHELL_APP = "today";
-self.SHELL_VERSION = "6"; // bump this when any file below changes
+self.SHELL_VERSION = "7"; // bump this when any file below changes
 self.SHELL_FILES = [
   "./",
   "./today.css",

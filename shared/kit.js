@@ -373,6 +373,9 @@
   function lockDevice(hub) {
     hub.forget();
     global.Hub.clearConfig();
+    try {
+      global.localStorage.removeItem(WHO_KEY);
+    } catch (e) {}
     global.location.reload();
   }
 
@@ -390,10 +393,17 @@
     return !!w.apps && (w.apps.indexOf("*") >= 0 || w.apps.indexOf(app) >= 0);
   }
 
-  /* asked on every start, so renaming a key in the Keys tab reaches its phone */
+  /* asked about twice a day (not on every start, which cost a round trip each
+     time), so renaming a key in the Keys tab still reaches its phone */
+  var WHO_KEY = "lifeapps.whoChecked";
   function learnWho(onDone) {
     var c = global.Hub.config();
     if (!c) return;
+    try {
+      var last = Number(global.localStorage.getItem(WHO_KEY) || 0);
+      if (c.mode && c.apps && Date.now() - last < 12 * 3600000) return;
+      global.localStorage.setItem(WHO_KEY, String(Date.now()));
+    } catch (e) {}
     global.Hub.call(c, { action: "ping" })
       .then(function (res) {
         var same = c.name === res.key && JSON.stringify(c.apps || null) === JSON.stringify(res.apps) && (c.mode || "") === (res.mode || "");
