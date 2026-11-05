@@ -442,14 +442,17 @@
           brand: p.brand || "",
           price: r2(num(p.price)),
           offer: p.offer === "yes",
+          discount: r2(num(p.discount)),
           base: m.base,
           per: perMeasure(p.price, m),
           variant: variantKey(p),
+          at: String(p.at || ""),
           by: p.by || "",
         };
       })
       .sort(function (a, b) {
-        return a.date < b.date ? 1 : a.date > b.date ? -1 : String(a.id) < String(b.id) ? 1 : -1;
+        /* the same day: the later one first */
+        return a.date < b.date ? 1 : a.date > b.date ? -1 : a.at < b.at ? 1 : a.at > b.at ? -1 : String(a.id) < String(b.id) ? 1 : -1;
       });
     var last = rows[0] || null;
     var variants = {};
@@ -592,6 +595,96 @@
     return c;
   }
 
+  /** How often each product was really bought: the number of different days it was bought on. */
+  function buyCounts(purchases) {
+    var days = {};
+    purchases.forEach(function (p) {
+      if (!p.product || !p.date) return;
+      var d = (days[p.product] = days[p.product] || {});
+      d[String(p.date).slice(0, 10)] = 1;
+    });
+    var c = {};
+    Object.keys(days).forEach(function (k) {
+      c[k] = Object.keys(days[k]).length;
+    });
+    return c;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  at the shelf and at the till                                     */
+  /* ---------------------------------------------------------------- */
+
+  /** A price typed for one ("each") or for the whole quantity ("all"). */
+  function splitPrice(price, mode, qty) {
+    var p = num(price);
+    var q = num(qty) || 1;
+    if (!(p > 0)) return { each: 0, total: 0 };
+    if (mode === "all") return { each: r2(p / q), total: r2(p) };
+    return { each: r2(p), total: r2(p * q) };
+  }
+
+  /**
+   * The latest price for one of the brand and size at each store, cheapest
+   * first. A store's normal price is used when it has one; a store seen only
+   * on offer shows its offer price, marked.
+   */
+  function storePrices(purchases, productId, brand, size) {
+    var st = priceStats(purchases, productId);
+    if (!st.rows.length) return [];
+    var key = variantKey({ brand: brand, size: size });
+    var v = st.variants.filter(function (x) {
+      return x.key === key;
+    })[0];
+    if (!v && !brand && !size && st.last) v = st.variants.filter(function (x) { return x.key === st.last.variant; })[0];
+    if (!v) return [];
+    return v.storeList
+      .map(function (s) {
+        var r = s.normal || s.last;
+        return { store: s.store, each: r2(r.price / (r.qty || 1)), date: r.date, offer: !s.normal, brand: v.brand, size: v.size };
+      })
+      .sort(function (a, b) {
+        return (a.offer ? 1 : 0) - (b.offer ? 1 : 0) || a.each - b.each;
+      });
+  }
+
+  /**
+   * A shelf price against what you know: the last price at this store, and
+   * the cheapest other store (normal prices only).
+   */
+  function shelfCheck(prices, each, store) {
+    var e = num(each);
+    var here = prices.filter(function (p) { return p.store === store; })[0] || null;
+    var other = null;
+    prices.forEach(function (p) {
+      if (p.store === store || p.offer || !p.store) return;
+      if (!other || p.each < other.each) other = p;
+    });
+    var out = { here: here, other: other, vsHere: null, vsOther: null };
+    if (e > 0 && here) out.vsHere = r2(e - here.each);
+    if (e > 0 && other) out.vsOther = r2(e - other.each);
+    return out;
+  }
+
+  /**
+   * The till: what the items you priced add up to, against the receipt.
+   * A receipt lower than the items is a discount at checkout; the shelf
+   * prices stay as they were.
+   */
+  function checkout(items, receipt) {
+    var sum = 0;
+    var priced = 0;
+    items.forEach(function (i) {
+      if (num(i.price) > 0) {
+        sum += num(i.price);
+        priced++;
+      }
+    });
+    sum = r2(sum);
+    var rc = num(receipt);
+    var diff = rc > 0 ? r2(rc - sum) : 0;
+    return { sum: sum, priced: priced, unpriced: items.length - priced, receipt: rc, diff: diff, discount: diff < 0 && priced ? r2(-diff) : 0 };
+  }
+
   /* ---------------------------------------------------------------- */
   /*  envelopes shared from Budget                                     */
   /* ---------------------------------------------------------------- */
@@ -722,6 +815,11 @@
     usage: usage,
     dueSoon: dueSoon,
     addCounts: addCounts,
+    buyCounts: buyCounts,
+    splitPrice: splitPrice,
+    storePrices: storePrices,
+    shelfCheck: shelfCheck,
+    checkout: checkout,
     addDays: addDays,
     catalogProducts: catalogProducts,
     mergeProducts: mergeProducts,

@@ -1,5 +1,5 @@
 self.SHELL_APP = "household";
-self.SHELL_VERSION = "5"; // bump this when any file below changes
+self.SHELL_VERSION = "6"; // bump this when any file below changes
 self.SHELL_FILES = [
   "./",
   "./household.css",

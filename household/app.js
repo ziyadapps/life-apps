@@ -1,8 +1,10 @@
 /*
  * Household: shared shopping lists with a catalogue, brands and sizes,
  * prices per store, envelope balances shared from Budget, and shopping
- * trips that go to Budget (straight away from your phone, after review
- * from hers). The logic lives in data.js; this file draws the screens.
+ * trips that go to Budget (straight away from a phone whose key opens
+ * Budget, after review from the others). Shopping is the list itself:
+ * tick what you take, prices are optional, and the receipt total is typed
+ * once at checkout. The logic lives in data.js; this file draws the screens.
  */
 (function () {
   "use strict";
@@ -22,15 +24,12 @@
       addTo: "Add to {list}",
       search: "Type an item or a brand",
       done: "Done",
-      bought: "Bought",
-      clearBought: "Clear bought ({n})",
-      tapAgainClear: "Tap again to clear",
       empty: "Nothing on this list. Tap Add below.",
       from: "from {who}",
-      boughtBy: "bought by {who}",
       siri: "Siri",
-      markBought: "Mark {name} as bought",
-      markOpen: "Put {name} back on the list",
+      putInBasket: "Put {name} in the basket",
+      takeOut: "Take {name} out of the basket",
+      inBasketOf: "in {who}'s basket",
       onList: "On the list",
       justAdded: "Just added",
       runningOut: "Running out",
@@ -50,10 +49,14 @@
       unit: "Unit",
       lastPrice: "last {price} at {store}",
       lastPriceNoStore: "last {price}",
-      cheaperAt: "usually {pct}% less at {store}",
+      herePrice: "here {price}",
+      storePrice: "{store} {price}",
       notAt: "not at {store}",
-      addPrice: "Add price",
       price: "Price",
+      each: "each",
+      forAll: "for all",
+      priceFor: "The price is",
+      eachLine: "{q} × {each} = {total}",
       store: "Store",
       noStore: "No store",
       brand: "Brand",
@@ -64,6 +67,18 @@
       otherSize: "Other size",
       sizeHint: "like 800g, 1.5L or 60 pcs",
       offer: "On offer",
+      seenBefore: "Seen before",
+      moreThan: "{n} more than at {store} ({price})",
+      lessThan: "{n} less than at {store} ({price})",
+      upHere: "{n} more than last time here",
+      downHere: "{n} less than last time here",
+      sameHere: "Same as last time here",
+      intoBasket: "Into the basket",
+      notHere: "Not here",
+      notFoundHere: "Not found here",
+      editItem: "Edit item",
+      edit: "Edit",
+      editName: "Edit {name}",
       save: "Save",
       saved: "Saved",
       nameEn: "Name in English",
@@ -71,14 +86,16 @@
       category: "Category",
       note: "Note",
       list: "List",
-      deleteItem: "Delete from list",
+      deleteItem: "Take off the list",
       tapAgainDelete: "Tap again to delete",
+      deleteEverywhere: "Delete this item and its prices",
+      tapAgainForGood: "Tap again to delete for good",
       deleted: "Deleted",
       back: "Back",
       notFound: "Not here any more. It may have been deleted on the other phone.",
       giveName: "Type a name.",
       history: "Price history",
-      noHistory: "No prices yet. Add one when you buy it.",
+      noHistory: "No prices yet. They come from your shopping.",
       compare: "Store by store",
       compareLead: "Latest normal price for the same brand and size.",
       cheapestPer: "Cheapest per {unit}: {price}, {what}",
@@ -86,6 +103,7 @@
       upBy: "Up {n} per {unit} since last time",
       downBy: "Down {n} per {unit} since last time",
       offerTag: "offer",
+      checkoutTag: "{n} off at checkout",
       lasts: "Lasts about {n} days. Runs out around {date}.",
       prices: "Prices",
       pricesLead: "Everything with a price. Tap one to compare stores.",
@@ -93,29 +111,31 @@
       addToList: "Add to {list}",
       startShopping: "Start shopping",
       iPaid: "I paid",
-      whichStore: "Which store?",
+      shopping: "Shopping",
       shoppingAt: "Shopping at {store}",
+      whereAreYou: "Where are you?",
       soFar: "{total} so far, {n} of {m} items",
       leftIn: "{env}: {left} left",
       overBy: "{env}: over by {n}",
-      tapItem: "Tap an item as you pick it up. Leave the price empty if you do not have it.",
-      gotIt: "Got it",
-      gotItNoPrice: "Got it, no price",
-      notHere: "Not here",
-      notFoundHere: "Not found here",
-      finish: "Finish shopping",
-      finishLead: "Type the total from the receipt. It can differ from the items you priced.",
-      itemsTotal: "Items priced: {total}",
+      shopHint: "Tick what you take. Tap an item for its price; prices are optional.",
+      basket: "In the basket",
+      noPrice: "no price",
+      checkout: "Checkout",
+      checkoutN: "Checkout, {n}",
+      checkoutLead: "Type the total on the receipt. The item prices stay as they were on the shelf, and any difference is kept as a checkout discount.",
+      itemsTotal: "Items: {total}",
+      unpricedN: "{n} without a price",
       receiptTotal: "Receipt total",
-      envelope: "Envelope",
+      discountLine: "Checkout discount: {n}",
+      extraLine: "{n} more than the items you priced",
+      discountOn: "Which item was it on? (optional)",
+      notSure: "Not sure",
       paidFrom: "Paid from",
-      finishTrip: "Save trip",
+      finishTrip: "Save",
       tripSaved: "Saved. It goes to Budget.",
       tripSavedReview: "Saved. It waits for review in Budget.",
-      continueShopping: "Continue shopping at {store}",
-      cancelTrip: "Cancel this trip",
-      tapAgainCancel: "Tap again to cancel",
-      inThisTrip: "In the basket",
+      stopShopping: "Stop shopping",
+      tapAgainStop: "Tap again: the basket goes back on the list",
       paidLead: "A quick purchase without a list.",
       amount: "Amount",
       date: "Date",
@@ -131,6 +151,7 @@
       deleteTrip: "Delete this trip",
       tripInBudget: "This is in Budget already. Undo it there first.",
       nItems: "{n} items",
+      oneItem: "1 item",
       quick: "Quick purchase",
       left: "left",
       spentMonth: "Spent this month",
@@ -156,6 +177,9 @@
       listEnv: "Envelope for {list}",
       noEnv: "None",
       envHelp: "Envelopes come from Budget. Turn on \"Show in Household\" for an envelope there.",
+      addressAs: "Arabic on this phone speaks to",
+      masc: "A man",
+      fem: "A woman",
       device: "This device",
       thisIs: "This phone is \"{name}\".",
       typePrice: "Type a price, like 12.50.",
@@ -180,15 +204,12 @@
       addTo: "أضف إلى {list}",
       search: "اكتب الغرض أو الماركة",
       done: "تم",
-      bought: "تم شراؤه",
-      clearBought: "مسح ما تم شراؤه ({n})",
-      tapAgainClear: "اضغط مرة ثانية للمسح",
       empty: "القائمة فاضية. اضغط إضافة تحت.",
       from: "من {who}",
-      boughtBy: "اشتراه {who}",
       siri: "سيري",
-      markBought: "تم شراء {name}",
-      markOpen: "إرجاع {name} للقائمة",
+      putInBasket: "{name} في السلة",
+      takeOut: "إخراج {name} من السلة",
+      inBasketOf: "في سلة {who}",
       onList: "في القائمة",
       justAdded: "أضيف الآن",
       runningOut: "قارب يخلص",
@@ -208,10 +229,14 @@
       unit: "الوحدة",
       lastPrice: "آخر سعر {price} في {store}",
       lastPriceNoStore: "آخر سعر {price}",
-      cheaperAt: "عادة أرخص {pct}% في {store}",
+      herePrice: "هنا {price}",
+      storePrice: "{store} {price}",
       notAt: "غير موجود في {store}",
-      addPrice: "إضافة السعر",
       price: "السعر",
+      each: "للحبة",
+      forAll: "للكل",
+      priceFor: "السعر",
+      eachLine: "{q} × {each} = {total}",
       store: "المحل",
       noStore: "بدون محل",
       brand: "الماركة",
@@ -222,6 +247,18 @@
       otherSize: "حجم آخر",
       sizeHint: "مثل 800 جم أو 1.5 لتر أو 60 حبة",
       offer: "عرض",
+      seenBefore: "الأسعار السابقة",
+      moreThan: "أغلى بـ {n} من {store} ({price})",
+      lessThan: "أرخص بـ {n} من {store} ({price})",
+      upHere: "أغلى بـ {n} من آخر مرة هنا",
+      downHere: "أرخص بـ {n} من آخر مرة هنا",
+      sameHere: "نفس سعر آخر مرة هنا",
+      intoBasket: "في السلة",
+      notHere: "غير موجود",
+      notFoundHere: "غير موجود هنا",
+      editItem: "تعديل الغرض",
+      edit: "تعديل",
+      editName: "تعديل {name}",
       save: "حفظ",
       saved: "تم الحفظ",
       nameEn: "الاسم بالإنجليزي",
@@ -231,12 +268,14 @@
       list: "القائمة",
       deleteItem: "حذف من القائمة",
       tapAgainDelete: "اضغط مرة ثانية للحذف",
+      deleteEverywhere: "حذف هذا الغرض وأسعاره",
+      tapAgainForGood: "اضغط مرة ثانية للحذف نهائيا",
       deleted: "تم الحذف",
       back: "رجوع",
       notFound: "غير موجود. يمكن انحذف من الجوال الثاني.",
       giveName: "اكتب الاسم.",
       history: "الأسعار السابقة",
-      noHistory: "لا توجد أسعار بعد. أضيفي السعر عند الشراء.",
+      noHistory: "لا توجد أسعار بعد. تجي من مشترياتك.",
       compare: "مقارنة المحلات",
       compareLead: "آخر سعر عادي لنفس الماركة والحجم.",
       cheapestPer: "الأرخص لكل {unit}: {price}، {what}",
@@ -244,40 +283,43 @@
       upBy: "زاد {n} لكل {unit} عن آخر مرة",
       downBy: "نقص {n} لكل {unit} عن آخر مرة",
       offerTag: "عرض",
+      checkoutTag: "خصم {n} عند الدفع",
       lasts: "يكفي تقريبا {n} يوم. يخلص حوالي {date}.",
       prices: "الأسعار",
-      pricesLead: "كل غرض له سعر. اضغطي عليه لمقارنة المحلات.",
+      pricesLead: "كل غرض له سعر. اضغط عليه لمقارنة المحلات.",
       filter: "ابحث عن غرض",
       addToList: "أضف إلى {list}",
       startShopping: "ابدأ التسوق",
       iPaid: "دفعت",
-      whichStore: "أي محل؟",
+      shopping: "التسوق",
       shoppingAt: "التسوق في {store}",
+      whereAreYou: "وين أنت؟",
       soFar: "{total} حتى الآن، {n} من {m}",
       leftIn: "{env}: باقي {left}",
       overBy: "{env}: زاد {n}",
-      tapItem: "اضغطي على الغرض لما تاخذينه. اتركي السعر فاضي إذا ما تعرفينه.",
-      gotIt: "أخذته",
-      gotItNoPrice: "أخذته بدون سعر",
-      notHere: "غير موجود",
-      notFoundHere: "غير موجود هنا",
-      finish: "إنهاء التسوق",
-      finishLead: "اكتبي إجمالي الفاتورة. ممكن يختلف عن مجموع الأسعار.",
-      itemsTotal: "مجموع الأسعار: {total}",
+      shopHint: "علّم على اللي تاخذه. اضغط على الغرض لسعره، والسعر اختياري.",
+      basket: "في السلة",
+      noPrice: "بدون سعر",
+      checkout: "الدفع",
+      checkoutN: "الدفع، {n}",
+      checkoutLead: "اكتب إجمالي الفاتورة. أسعار الأغراض تبقى مثل ما كانت على الرف، والفرق ينحفظ كخصم عند الدفع.",
+      itemsTotal: "الأغراض: {total}",
+      unpricedN: "{n} بدون سعر",
       receiptTotal: "إجمالي الفاتورة",
-      envelope: "الظرف",
+      discountLine: "خصم عند الدفع: {n}",
+      extraLine: "أكثر بـ {n} من الأغراض المسعرة",
+      discountOn: "على أي غرض كان؟ (اختياري)",
+      notSure: "ما أدري",
       paidFrom: "الدفع من",
-      finishTrip: "حفظ المشوار",
+      finishTrip: "حفظ",
       tripSaved: "تم الحفظ، ويروح للميزانية.",
       tripSavedReview: "تم الحفظ، وينتظر المراجعة في الميزانية.",
-      continueShopping: "كملي التسوق في {store}",
-      cancelTrip: "إلغاء هذا المشوار",
-      tapAgainCancel: "اضغط مرة ثانية للإلغاء",
-      inThisTrip: "في السلة",
+      stopShopping: "إيقاف التسوق",
+      tapAgainStop: "اضغط مرة ثانية: السلة ترجع للقائمة",
       paidLead: "شراء سريع بدون قائمة.",
       amount: "المبلغ",
       date: "التاريخ",
-      paidNote: "وش اشتريتي؟ (اختياري)",
+      paidNote: "وش اشتريت؟ (اختياري)",
       trips: "المشاوير",
       tripsLead: "كل المشتريات وهل دخلت الميزانية.",
       noTrips: "لا توجد مشاوير بعد.",
@@ -289,6 +331,7 @@
       deleteTrip: "حذف هذا المشوار",
       tripInBudget: "هذا موجود في الميزانية. تراجع عنه هناك أول.",
       nItems: "{n} أغراض",
+      oneItem: "غرض واحد",
       quick: "شراء سريع",
       left: "باقي",
       spentMonth: "المصروف هذا الشهر",
@@ -314,22 +357,55 @@
       listEnv: "ظرف {list}",
       noEnv: "بدون",
       envHelp: "الظروف تجي من الميزانية. فعّل \"إظهار في البيت\" للظرف هناك.",
+      addressAs: "التطبيق يخاطب في هذا الجوال",
+      masc: "رجل",
+      fem: "امرأة",
       device: "هذا الجهاز",
       thisIs: "هذا الجوال باسم \"{name}\".",
       typePrice: "اكتب السعر، مثل 12.50",
       typeAmount: "اكتب المبلغ، أكثر من صفر.",
-      chooseEnv: "اختاري الظرف اللي دفعتي منه.",
+      chooseEnv: "اختر الظرف اللي دفعت منه.",
       updating: "جاري تجهيز القوائم…",
       scan: "مسح",
-      scanTitle: "امسحي الباركود",
-      scanLead: "وجهي الكاميرا على الباركود.",
-      scanNoCamera: "الكاميرا غير متاحة. اكتبي الرقم اللي تحت الباركود.",
+      scanTitle: "امسح الباركود",
+      scanLead: "وجّه الكاميرا على الباركود.",
+      scanNoCamera: "الكاميرا غير متاحة. اكتب الرقم اللي تحت الباركود.",
       scanType: "رقم الباركود",
       scanGo: "بحث",
       close: "إغلاق",
       newBarcode: "باركود جديد {code}",
       newBarcodeLead: "أي غرض هذا؟ المرة الجاية يتعبى لحاله.",
       linkSave: "حفظ الباركود",
+      pick: "اختر الغرض",
+    },
+    /* the same, speaking to a woman */
+    ar_f: {
+      addTo: "أضيفي إلى {list}",
+      search: "اكتبي الغرض أو الماركة",
+      empty: "القائمة فاضية. اضغطي إضافة تحت.",
+      addAll: "أضيفي الكل ({n})",
+      tapAgainDelete: "اضغطي مرة ثانية للحذف",
+      tapAgainForGood: "اضغطي مرة ثانية للحذف نهائيا",
+      giveName: "اكتبي الاسم.",
+      pricesLead: "كل غرض له سعر. اضغطي عليه لمقارنة المحلات.",
+      filter: "ابحثي عن غرض",
+      addToList: "أضيفي إلى {list}",
+      startShopping: "ابدئي التسوق",
+      iPaid: "دفعت",
+      whereAreYou: "وين أنتِ؟",
+      shopHint: "علّمي على اللي تاخذينه. اضغطي على الغرض لسعره، والسعر اختياري.",
+      checkoutLead: "اكتبي إجمالي الفاتورة. أسعار الأغراض تبقى مثل ما كانت على الرف، والفرق ينحفظ كخصم عند الدفع.",
+      notSure: "ما أدري",
+      tapAgainStop: "اضغطي مرة ثانية: السلة ترجع للقائمة",
+      paidNote: "وش اشتريتي؟ (اختياري)",
+      tripInBudget: "هذا موجود في الميزانية. تراجعي عنه هناك أول.",
+      typePrice: "اكتبي السعر، مثل 12.50",
+      typeAmount: "اكتبي المبلغ، أكثر من صفر.",
+      chooseEnv: "اختاري الظرف اللي دفعتي منه.",
+      envHelp: "الظروف تجي من الميزانية. فعّلي \"إظهار في البيت\" للظرف هناك.",
+      scanTitle: "امسحي الباركود",
+      scanLead: "وجّهي الكاميرا على الباركود.",
+      scanNoCamera: "الكاميرا غير متاحة. اكتبي الرقم اللي تحت الباركود.",
       pick: "اختاري الغرض",
     },
   });
@@ -340,7 +416,7 @@
     { id: "home", name: "Home", name_ar: "البيت", order: 3, active: "yes", env: "" },
   ];
 
-  var S = { hub: null, main: null, syncedOnce: false, seeding: false, session: [], expanded: null, query: "", cache: null, link: null };
+  var S = { hub: null, main: null, syncedOnce: false, seeding: false, session: [], expanded: null, draft: null, query: "", cache: null, link: null };
 
   /* ---------------------------------------------------------------- */
   /*  reading                                                          */
@@ -366,11 +442,13 @@
   /* worked out once per redraw: the catalogue merged with your products, and every brand */
   function cache() {
     if (!S.cache) {
-      var list = D.mergeProducts(CATALOG, S.hub.all("products"));
+      var all = D.mergeProducts(CATALOG, S.hub.all("products"));
       var byId = {};
-      list.forEach(function (p) {
+      all.forEach(function (p) {
         byId[p.id] = p;
       });
+      /* a deleted catalogue item stays known by id, out of search */
+      var list = all.filter(function (p) { return p.hidden !== "yes"; });
       S.cache = { products: list, byId: byId, brands: D.brandMap(C, S.hub.all("brands")), purchases: S.hub.all("purchases") };
     }
     return S.cache;
@@ -557,7 +635,8 @@
   function lastPriceText(productId) {
     var st = D.priceStats(purchases(), productId);
     if (!st.last) return "";
-    return st.last.store ? t("lastPrice", { price: money(st.last.price), store: storeName(st.last.store) }) : t("lastPriceNoStore", { price: money(st.last.price) });
+    var each = st.last.price / (st.last.qty || 1);
+    return st.last.store ? t("lastPrice", { price: money(each), store: storeName(st.last.store) }) : t("lastPriceNoStore", { price: money(each) });
   }
 
   function cheaperText(productId) {
@@ -585,19 +664,23 @@
     return p;
   }
 
+  /** A purchase as it goes into the price history: the shelf price, for the quantity taken. */
   function purchaseRow(i, extra) {
     return Object.assign(
       {
         id: "pu-" + i.id,
         product: i.product,
         date: i.done ? localDate(new Date(i.done)) : today(),
+        at: i.done || new Date().toISOString(),
         store: i.store || "",
         qty: Number(i.qty) || 1,
         unit: i.unit || "pcs",
         brand: i.brand || "",
         size: i.size || "",
-        price: Number(i.price) || 0,
+        price: lineTotal(i),
+        each: eachOf(i),
         offer: i.offer || "",
+        discount: 0,
         trip: i.trip || "",
         by: i.done_by || me(),
         item: i.id,
@@ -606,19 +689,41 @@
     );
   }
 
-  function tick(i) {
-    var now = new Date().toISOString();
-    if (i.done) {
-      var w = [{ table: "items", row: { id: i.id, done: "", done_by: "" } }];
-      if (S.hub.get("purchases", "pu-" + i.id)) w.push({ table: "purchases", row: { id: "pu-" + i.id, del: now } });
-      S.hub.putMany(w);
-    } else {
-      var done = Object.assign({}, i, { done: now, done_by: me(), missing: "" });
-      S.hub.putMany([
-        { table: "items", row: { id: i.id, done: now, done_by: me(), missing: "" } },
-        { table: "purchases", row: purchaseRow(done) },
-      ]);
-    }
+  /* an item's price is kept for one ("each") and for the quantity ("price") */
+  function eachOf(i) {
+    if (Number(i.each) > 0) return D.r2(Number(i.each));
+    var q = Number(i.qty) || 1;
+    return Number(i.price) > 0 ? D.r2(Number(i.price) / q) : 0;
+  }
+
+  function lineTotal(i) {
+    if (Number(i.each) > 0) return D.r2(Number(i.each) * (Number(i.qty) || 1));
+    return Number(i.price) > 0 ? D.r2(Number(i.price)) : 0;
+  }
+
+  /** What is in this phone's basket: items ticked on any list during the trip. */
+  function basketItems(trip) {
+    return S.hub.all("items").filter(function (i) { return i.trip === trip.id; });
+  }
+
+  function basketTotal(items) {
+    return D.r2(items.reduce(function (s, i) { return s + lineTotal(i); }, 0));
+  }
+
+  /** The trip this phone is on, started by Start shopping or by the first tick. */
+  function ensureTrip(listId) {
+    var tr = myTrip();
+    if (tr) return tr;
+    var list = find("lists", listId) || currentList();
+    tr = S.hub.put("trips", { kind: "shop", store: "", list: list ? list.id : "", env: listEnv(list), date: today(), by: me(), started: new Date().toISOString(), status: "open", finished: "", total: 0, items_total: 0, discount: 0, discount_item: "", count: 0, note: "", auto: "", budget: "", budget_ref: "", posted: "" });
+    setMyTrip(tr.id);
+    return tr;
+  }
+
+  function putInBasket(i) {
+    var tr = ensureTrip(i.list);
+    S.hub.put("items", { id: i.id, trip: tr.id, missing: "" });
+    if (S.expanded === i.id) S.expanded = null;
   }
 
   /* ---------------------------------------------------------------- */
@@ -733,7 +838,7 @@
    * − 2 + with a unit picker. Changing it saves straight away; − at the
    * smallest step takes the item off the list.
    */
-  function stepper(item, onRemoved) {
+  function stepper(item, onRemoved, onChange) {
     var unit = item.unit || "pcs";
     var step = D.unitOf(unit).step;
     var shown = h("span", { class: "step-qty", "aria-live": "polite" }, fmtNum(item.qty || step));
@@ -750,6 +855,7 @@
       S.hub.put("items", { id: item.id, qty: q });
       var p = product(item.product);
       if (p && !p._cat && Number(p.qty) !== q) S.hub.put("products", { id: p.id, qty: q });
+      if (onChange) onChange(q);
     }
     var unitSel = select(unitOptions(), unit, { class: "unit-select", "aria-label": t("unit") });
     unitSel.addEventListener("change", function () {
@@ -948,103 +1054,195 @@
       return;
     }
     var trip = myTrip();
-    if (trip) main.appendChild(h("a", { class: "banner-link", href: "#/shop" }, t("continueShopping", { store: storeName(trip.store) })));
+    var inBasket = trip ? basketItems(trip) : [];
+    var open = openItems(current.id).filter(function (i) { return !(trip && i.trip === trip.id); });
+    var store = trip ? trip.store : "";
+    var here = store ? open.filter(function (i) { return i.missing !== store; }) : open;
+    var missing = store ? open.filter(function (i) { return i.missing === store; }) : [];
 
-    var open = openItems(current.id);
-    var done = S.hub.all("items").filter(function (i) { return i.list === current.id && i.done; })
-      .sort(function (a, b) { return String(b.done) < String(a.done) ? -1 : 1; });
-
-    if (!trip) {
+    if (trip) main.appendChild(shopHead(trip, inBasket, open.length));
+    else {
       main.appendChild(h("div", { class: "btn-row", style: "margin:10px 0 2px" },
-        open.length ? h("a", { class: "btn btn-primary", href: "#/shop", id: "start-shop", style: "text-decoration:none" }, t("startShopping")) : null,
+        open.length ? h("button", { type: "button", class: "btn btn-primary", id: "start-shop", onclick: function () {
+          ensureTrip(current.id);
+          render();
+        } }, t("startShopping")) : null,
         h("a", { class: "btn", href: "#/paid", id: "i-paid", style: "text-decoration:none" }, t("iPaid"))));
     }
 
-    if (!open.length) main.appendChild(h("div", { class: "list", style: "margin-top:10px" }, h("div", { class: "empty" }, t("empty"))));
-    byCategory(open).forEach(function (g) {
+    if (!open.length && !inBasket.length) main.appendChild(h("div", { class: "list", style: "margin-top:10px" }, h("div", { class: "empty" }, t("empty"))));
+    byCategory(here).forEach(function (g) {
       var list = h("div", { class: "list" });
       g.items.forEach(function (i) {
-        list.appendChild(itemRow(i));
-        if (S.expanded === i.id) list.appendChild(h("div", { class: "expand" }, stepper(i, render)));
+        list.appendChild(itemRow(i, trip));
+        if (S.expanded === i.id) list.appendChild(h("div", { class: "expand" }, pad(i, trip)));
       });
       main.appendChild(section(g.name, list, { class: "section cat", "data-cat": g.id }));
     });
-
-    if (done.length) {
-      var dl = h("div", { class: "list", id: "done-items" });
-      done.forEach(function (i) {
-        dl.appendChild(itemRow(i));
-        if (S.expanded === i.id) dl.appendChild(h("div", { class: "expand" }, pricePad(i, { save: true })));
+    if (missing.length) {
+      var ml = h("div", { class: "list", id: "missing" });
+      missing.forEach(function (i) {
+        ml.appendChild(itemRow(i, trip));
+        if (S.expanded === i.id) ml.appendChild(h("div", { class: "expand" }, pad(i, trip)));
       });
-      main.appendChild(section(t("bought"), dl));
-      main.appendChild(h("div", { class: "btn-row", style: "margin-top:12px" },
-        Kit.confirmButton(t("clearBought", { n: done.length }), t("tapAgainClear"), function () {
-          var now = new Date().toISOString();
-          S.hub.putMany(done.map(function (i) { return { table: "items", row: { id: i.id, del: now } }; }));
-          render();
-        })));
+      main.appendChild(section(t("notFoundHere"), ml));
     }
+    if (inBasket.length) {
+      var bl = h("div", { class: "list", id: "basket" });
+      inBasket.forEach(function (i) {
+        bl.appendChild(basketRow(i));
+        if (S.expanded === i.id) bl.appendChild(h("div", { class: "expand" }, pad(i, trip)));
+      });
+      main.appendChild(section(t("basket"), bl));
+    }
+    if (trip) main.appendChild(h("div", { class: "btn-row", style: "margin-top:14px" }, stopButton(trip)));
 
     main.appendChild(h("div", { class: "foot-links" },
       h("a", { class: "btn btn-quiet", href: "#/prices" }, t("prices")),
       h("a", { class: "btn btn-quiet", href: "#/trips" }, t("trips")),
       h("a", { class: "btn btn-quiet", href: "#/settings" }, t("settings"))));
 
-    addBar(current);
+    addBar(current, trip, inBasket);
   }
 
-  function itemRow(i) {
+  /** The top of the list while shopping: where you are, the basket so far, the envelope. */
+  function shopHead(trip, inBasket, openCount) {
+    var total = basketTotal(inBasket);
+    var env = find("envelopes", trip.env || listEnv(find("lists", trip.list)));
+    var envLine = null;
+    if (env) {
+      var left = D.r2(envView(env).left - total);
+      envLine = h("p", { class: "trip-env", "data-tone": left < 0 ? "bad" : null }, left < 0 ? t("overBy", { env: nm(env), n: money(-left) }) : t("leftIn", { env: nm(env), left: money(left) }));
+    }
+    /* the store you are at comes first, so it is in view */
+    var order = stores().slice().sort(function (a, b) { return (b.id === trip.store ? 1 : 0) - (a.id === trip.store ? 1 : 0); });
+    var where = chips(t("whereAreYou"), order.map(function (s) { return { value: s.id, label: nm(s) }; }), trip.store || "", function (v) {
+      S.hub.put("trips", { id: trip.id, store: v === trip.store ? "" : v });
+      render();
+    }, { id: "store-chips", class: "chips chips-scroll" });
+    return h("div", { class: "trip-head" },
+      h("div", { class: "trip-top" },
+        h("h1", { class: "page-title" }, trip.store ? t("shoppingAt", { store: storeName(trip.store) }) : t("shopping")),
+        h("button", { type: "button", class: "btn", id: "shop-scan", onclick: function () { scan("shop"); } }, t("scan"))),
+      trip.store ? null : h("p", { class: "field-label" }, t("whereAreYou")),
+      where.el,
+      h("p", { class: "trip-total" }, t("soFar", { total: money(total), n: inBasket.length, m: inBasket.length + openCount })),
+      envLine,
+      h("p", { class: "note" }, t("shopHint")));
+  }
+
+  function stopButton(trip) {
+    return Kit.confirmButton(t("stopShopping"), t("tapAgainStop"), function () {
+      var now = new Date().toISOString();
+      var w = basketItems(trip).map(function (i) { return { table: "items", row: { id: i.id, trip: "" } }; });
+      w.push({ table: "trips", row: { id: trip.id, status: "cancelled", del: now } });
+      S.hub.putMany(w);
+      setMyTrip(null);
+      S.expanded = null;
+      if (location.hash === "#/" || location.hash === "") render();
+      else location.hash = "#/";
+    }, "btn btn-quiet");
+  }
+
+  /** What a row says about prices: here and the cheapest other store, or the stores seen. */
+  function priceHint(i, trip) {
+    var prices = D.storePrices(purchases(), i.product, i.brand, i.size);
+    if (!prices.length) return lastPriceText(i.product);
+    var store = trip && trip.store;
+    var bits = [];
+    if (store) {
+      var c = D.shelfCheck(prices, 0, store);
+      if (c.here) bits.push(t("herePrice", { price: money(c.here.each) }));
+      if (c.other && (!c.here || c.other.each < c.here.each)) bits.push(t("storePrice", { store: storeName(c.other.store), price: money(c.other.each) }));
+      if (!bits.length) bits.push(t("storePrice", { store: storeName(prices[0].store) || "-", price: money(prices[0].each) }));
+    } else {
+      prices.slice(0, 2).forEach(function (p) {
+        bits.push(t("storePrice", { store: storeName(p.store) || "-", price: money(p.each) + (p.offer ? " (" + t("offerTag") + ")" : "") }));
+      });
+    }
+    return bits.join(sep());
+  }
+
+  function itemRow(i, trip) {
     var bits = [];
     var v = variantText(i.brand, i.size);
     if (v) bits.push(v);
     if (i.note) bits.push(i.note);
-    if (i.done) {
-      if (Number(i.price) > 0) bits.push(money(i.price) + (i.offer === "yes" ? " (" + t("offerTag") + ")" : "") + (i.store ? sep() + storeName(i.store) : ""));
-      if (i.done_by && i.done_by !== me()) bits.push(t("boughtBy", { who: whoText(i.done_by) }));
-    } else {
-      if (i.missing) bits.push(t("notAt", { store: storeName(i.missing) }));
-      var lp = lastPriceText(i.product);
-      if (lp) bits.push(lp);
-      var ch = cheaperText(i.product);
-      if (ch) bits.push(ch);
-      if (i.by && i.by !== me()) bits.push(t("from", { who: whoText(i.by) }));
-    }
+    if (i.missing && !(trip && trip.store === i.missing)) bits.push(t("notAt", { store: storeName(i.missing) }));
+    var other = i.trip && !(trip && i.trip === trip.id) ? find("trips", i.trip) : null;
+    if (other && other.status === "open") bits.push(t("inBasketOf", { who: whoText(other.by) }));
+    var hint = priceHint(i, trip);
+    if (hint) bits.push(hint);
+    if (i.by && i.by !== me()) bits.push(t("from", { who: whoText(i.by) }));
     var name = itemName(i);
-    var right;
-    if (i.done && !(Number(i.price) > 0)) {
-      right = h("button", { type: "button", class: "chip-btn", onclick: function () { S.expanded = S.expanded === i.id ? null : i.id; render(); } }, t("addPrice"));
-    } else {
-      right = h("button", { type: "button", class: "qty", "aria-label": t("qty") + ": " + qtyText(i.qty, i.unit), "aria-expanded": S.expanded === i.id ? "true" : "false", onclick: function () {
-        S.expanded = S.expanded === i.id ? null : i.id;
-        render();
-      } }, qtyText(i.qty, i.unit));
-    }
     return h(
       "div",
-      { class: "item", "data-done": i.done ? "yes" : null, "data-pending": S.hub.isPending("items", i.id) ? "yes" : null, "data-id": i.id },
-      h("button", { type: "button", class: "tick-btn", "aria-label": i.done ? t("markOpen", { name: name }) : t("markBought", { name: name }), onclick: function () {
-        tick(i);
+      { class: "item", "data-pending": S.hub.isPending("items", i.id) ? "yes" : null, "data-id": i.id, "data-open": S.expanded === i.id ? "yes" : null },
+      h("button", { type: "button", class: "tick-btn", "aria-label": t("putInBasket", { name: name }), onclick: function () {
+        putInBasket(i);
         render();
       } }, h("span", { "aria-hidden": "true" })),
-      h("a", { class: "item-main", href: "#/item/" + i.id },
+      h("button", { type: "button", class: "item-main", "aria-expanded": S.expanded === i.id ? "true" : "false", onclick: function () { toggle(i.id); } },
         h("span", { class: "item-name" }, name),
         bits.length ? h("span", { class: "item-sub" }, bits.join(sep())) : null),
-      right
+      h("button", { type: "button", class: "qty", "aria-label": t("qty") + ": " + qtyText(i.qty, i.unit), onclick: function () { toggle(i.id); } }, qtyText(i.qty, i.unit))
     );
   }
 
-  /** The Add bar at the bottom. Opening the add screen in the same tap keeps the keyboard up on iPhone. */
-  function addBar(current) {
+  function basketRow(i) {
+    var name = itemName(i);
+    var line = lineTotal(i);
+    var bits = [];
+    var v = variantText(i.brand, i.size);
+    if (v) bits.push(v);
+    if (line > 0) bits.push(Number(i.qty) > 1 ? t("eachLine", { q: fmtNum(i.qty), each: money(eachOf(i)), total: money(line) }) : qtyText(i.qty, i.unit));
+    else bits.push(qtyText(i.qty, i.unit));
+    if (i.offer === "yes") bits.push(t("offerTag"));
+    return h(
+      "div",
+      { class: "item", "data-done": "yes", "data-id": i.id, "data-pending": S.hub.isPending("items", i.id) ? "yes" : null },
+      h("button", { type: "button", class: "tick-btn", "aria-label": t("takeOut", { name: name }), onclick: function () {
+        S.hub.put("items", { id: i.id, trip: "" });
+        render();
+      } }, h("span", { "aria-hidden": "true" })),
+      h("button", { type: "button", class: "item-main", "aria-expanded": S.expanded === i.id ? "true" : "false", onclick: function () { toggle(i.id); } },
+        h("span", { class: "item-name" }, name),
+        h("span", { class: "item-sub" }, bits.join(sep()))),
+      h("span", { class: "amt" + (line > 0 ? "" : " muted") }, line > 0 ? money(line) : t("noPrice"))
+    );
+  }
+
+  function toggle(id) {
+    S.expanded = S.expanded === id ? null : id;
+    S.draft = null;
+    render();
+    if (S.expanded) {
+      var pi = document.querySelector(".pad .price-input");
+      if (pi && pi.scrollIntoView) pi.closest(".expand").scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  /**
+   * The bar at the bottom: Add, and Checkout once something is in the
+   * basket. Opening the add screen in the same tap keeps the keyboard up on iPhone.
+   */
+  function addBar(current, trip, inBasket) {
     removeBar();
-    var bar = h("div", { class: "composer", id: "composer" },
-      h("div", { class: "composer-inner" },
-        h("button", { type: "button", class: "btn btn-primary btn-wide add-bar", id: "open-add", onclick: function () {
-          history.pushState(null, "", "#/add");
-          render();
-          var input = document.getElementById("add-search");
-          if (input) input.focus();
-        } }, "+ " + t("addTo", { list: nm(current) }))));
-    document.body.appendChild(bar);
+    var shopping = trip && inBasket && inBasket.length;
+    var addBtn = h("button", { type: "button", class: "btn " + (shopping ? "add-small" : "btn-primary btn-wide add-bar"), id: "open-add", "aria-label": t("addTo", { list: nm(current) }), onclick: function () {
+      history.pushState(null, "", "#/add");
+      render();
+      var input = document.getElementById("add-search");
+      if (input) input.focus();
+    } }, shopping ? "+ " + t("add") : "+ " + t("addTo", { list: nm(current) }));
+    var inner = h("div", { class: "composer-inner" + (shopping ? " composer-two" : "") }, addBtn);
+    if (shopping) {
+      var n = inBasket.length === 1 ? t("oneItem") : t("nItems", { n: inBasket.length });
+      var total = basketTotal(inBasket);
+      inner.appendChild(h("a", { class: "btn btn-primary checkout-btn", id: "open-checkout", href: "#/checkout" },
+        h("span", null, t("checkoutN", { n: n })), total > 0 ? h("span", { class: "checkout-sum" }, money(total)) : null));
+    }
+    document.body.appendChild(h("div", { class: "composer", id: "composer" }, inner));
   }
 
   function removeBar() {
@@ -1135,7 +1333,7 @@
         var q = input.value.trim();
         if (!q) return;
         var exact = D.exactMatch(products(), q);
-        var first = exact || D.search(products(), q, D.addCounts(raw("items")), cache().brands)[0];
+        var first = exact || D.search(products(), q, D.buyCounts(purchases()), cache().brands)[0];
         var starts = first && [first.name, first.name_ar].some(function (n) { return n && D.bare(n).indexOf(D.bare(q)) === 0; });
         if (exact || starts) addProduct(current, first);
         else addNew(current, q);
@@ -1159,6 +1357,7 @@
         } },
           h("span", { class: "item-name" }, nm(p)),
           h("span", { class: "item-sub" }, item ? t("onList") + (variantText(item.brand, item.size) ? sep() + variantText(item.brand, item.size) : "") : subText)),
+        h("a", { class: "edit-btn", href: "#/product/" + p.id + "?from=add", "aria-label": t("editName", { name: nm(p) }) }, t("edit")),
         item ? stepper(item, paint) : h("button", { type: "button", class: "add-btn", "aria-label": t("add") + " " + nm(p), onclick: function () {
           addProduct(current, p);
           paint();
@@ -1179,7 +1378,8 @@
       Kit.clear(results);
       var q = input.value.trim();
       S.query = q;
-      var counts = D.addCounts(raw("items"));
+      /* "often bought" means bought on two days or more, not added to a list */
+      var counts = D.buyCounts(purchases());
       var all = products();
       if (q) {
         var found = D.search(all, q, counts, cache().brands).slice(0, 30);
@@ -1216,7 +1416,7 @@
           paint();
         } }, t("addAll", { n: due.length })) : null));
       var often = all
-        .filter(function (p) { return counts[p.id] && !ids[p.id] && !due.some(function (d) { return d.product.id === p.id; }); })
+        .filter(function (p) { return counts[p.id] >= 2 && !ids[p.id] && !due.some(function (d) { return d.product.id === p.id; }); })
         .sort(function (a, b) { return counts[b.id] - counts[a.id]; })
         .slice(0, 20);
       put(block(t("often"), often.map(function (p) { return row(p); })));
@@ -1228,35 +1428,92 @@
   }
 
   /* ---------------------------------------------------------------- */
-  /*  price pad: in shopping mode, and for bought items                 */
+  /*  the price pad: at the shelf                                      */
   /* ---------------------------------------------------------------- */
 
   /**
-   * Quantity, brand, size, price and offer for one item. In a trip it ticks
-   * the item as bought at the trip's store; otherwise it saves the price on
-   * an item already bought, with a store picker.
+   * Quantity, brand, size and an optional price for one item, typed for
+   * one or for all of them. As you type, it says how the price compares
+   * with this store last time and with the cheapest other store.
    */
-  function pricePad(item, opts) {
-    var trip = opts.trip || null;
+  function pad(item, trip) {
     var p = product(item.product) || { id: item.product, sizes: [], brands: [] };
-    var st = D.priceStats(purchases(), item.product);
-    var hints = [];
-    if (st.last) hints.push((st.last.store ? t("lastPrice", { price: money(st.last.price), store: storeName(st.last.store) }) : t("lastPriceNoStore", { price: money(st.last.price) })) + (variantText(st.last.brand, st.last.size) ? " (" + variantText(st.last.brand, st.last.size) + ")" : ""));
-    var ch = D.cheaperElsewhere(st);
-    if (ch) hints.push(t("cheaperAt", { pct: ch.pct, store: storeName(ch.store) }));
+    var inBasket = !!(trip && item.trip === trip.id);
+    var store = trip ? trip.store : "";
+    var draft = S.draft && S.draft.id === item.id ? S.draft : null;
+    var mode = draft ? draft.mode : "each";
+    var offer = draft ? draft.offer : item.offer === "yes";
+    var startEach = eachOf(item);
+    var priceInput = h("input", { class: "field-input price-input", type: "text", inputmode: "decimal", autocomplete: "off", dir: "ltr", placeholder: "0.00", "aria-label": t("price"),
+      value: draft ? draft.price : startEach > 0 ? String(startEach) : "" });
     var bs = brandSize(p, item.brand, item.size);
-    var priceInput = h("input", { class: "field-input price-input", type: "text", inputmode: "decimal", autocomplete: "off", dir: "ltr", placeholder: "0.00", "aria-label": t("price"), value: Number(item.price) > 0 ? String(item.price) : "" });
-    var offer = item.offer === "yes";
+    var math = h("p", { class: "pad-math", "aria-live": "polite" });
+    var check = h("p", { class: "shelf-check", "aria-live": "polite" });
+    var msg = h("p", { class: "form-error", role: "alert" });
+
+    function keep() {
+      S.draft = { id: item.id, price: priceInput.value, mode: mode, offer: offer };
+    }
+    function qty() {
+      var fresh = find("items", item.id) || item;
+      return Number(fresh.qty) || 1;
+    }
+    function paintMath() {
+      var pr = readMoney(priceInput.value);
+      var q = qty();
+      Kit.clear(math);
+      Kit.clear(check);
+      check.removeAttribute("data-tone");
+      if (!(pr > 0)) return;
+      var sp = D.splitPrice(pr, mode, q);
+      if (q !== 1) math.textContent = t("eachLine", { q: fmtNum(q), each: money(sp.each), total: money(sp.total) });
+      var v = bs.read() || { brand: item.brand, size: item.size };
+      var prices = D.storePrices(purchases().filter(function (x) { return x.item !== item.id; }), item.product, v.brand, v.size);
+      var c = D.shelfCheck(prices, sp.each, store);
+      var lines = [];
+      var tone = null;
+      if (c.vsOther !== null && Math.abs(c.vsOther) >= 0.01) {
+        lines.push(t(c.vsOther > 0 ? "moreThan" : "lessThan", { n: money(Math.abs(c.vsOther)), store: storeName(c.other.store), price: money(c.other.each) }));
+        tone = c.vsOther > 0 ? "bad" : "good";
+      }
+      if (c.vsHere !== null) {
+        if (Math.abs(c.vsHere) < 0.01) lines.push(t("sameHere"));
+        else lines.push(t(c.vsHere > 0 ? "upHere" : "downHere", { n: money(Math.abs(c.vsHere)) }));
+        if (!tone && c.vsHere > 0) tone = "bad";
+      }
+      check.textContent = lines.join(". ");
+      if (tone) check.setAttribute("data-tone", tone);
+    }
+
+    var modeChips = chips(t("priceFor"), [{ value: "each", label: t("each") }, { value: "all", label: t("forAll") }], mode, function (v) {
+      mode = v;
+      keep();
+      paintMath();
+    }, { "data-kind": "mode", class: "chips chips-tight" });
     var offerBtn = h("button", { type: "button", class: "chip offer-btn", "aria-pressed": offer ? "true" : "false", onclick: function () {
       offer = !offer;
       offerBtn.setAttribute("aria-pressed", offer ? "true" : "false");
+      keep();
     } }, t("offer"));
-    var storeSel = trip ? null : select(storeOptions(true), item.store || (st.last && st.last.store) || "", { "aria-label": t("store") });
-    var msg = h("p", { class: "form-error", role: "alert" });
+    priceInput.addEventListener("input", function () {
+      keep();
+      paintMath();
+    });
 
-    function save(withPrice) {
-      var price = withPrice ? readMoney(priceInput.value) : null;
-      if (withPrice && price !== null && isNaN(price)) {
+    /* what was paid before, cheapest first */
+    var prices = D.storePrices(purchases(), item.product, item.brand, item.size);
+    var seen = prices.length
+      ? h("div", { class: "seen" }, h("span", { class: "field-label" }, t("seenBefore")),
+        h("div", { class: "seen-list" }, prices.slice(0, 5).map(function (x) {
+          return h("span", { class: "seen-chip", "data-here": x.store && x.store === store ? "yes" : null },
+            (storeName(x.store) || "-") + " " + money(x.each) + (x.offer ? " (" + t("offerTag") + ")" : ""),
+            h("small", null, " " + dayText(x.date)));
+        })))
+      : null;
+
+    function save() {
+      var pr = readMoney(priceInput.value);
+      if (pr !== null && isNaN(pr)) {
         msg.textContent = t("typePrice");
         return;
       }
@@ -1266,131 +1523,49 @@
         return;
       }
       var fresh = find("items", item.id) || item;
-      var store = trip ? trip.store : storeSel.value;
-      var now = new Date().toISOString();
-      var row = { id: item.id, price: price || 0, offer: price && offer ? "yes" : "", store: store, brand: v.brand, size: v.size, missing: "" };
-      if (trip) {
-        row.trip = trip.id;
-        if (!fresh.done) {
-          row.done = now;
-          row.done_by = me();
-        }
-      }
-      var merged = Object.assign({}, fresh, row);
-      var writes = [{ table: "items", row: row }, { table: "purchases", row: purchaseRow(merged) }];
+      var sp = D.splitPrice(pr, mode, Number(fresh.qty) || 1);
+      var row = { id: item.id, price: sp.total, each: sp.each, offer: sp.total && offer ? "yes" : "", brand: v.brand, size: v.size, missing: "" };
+      if (!inBasket) row.trip = ensureTrip(fresh.list).id;
+      var writes = [{ table: "items", row: row }];
       if (v.newBrand) writes.push({ table: "brands", row: v.newBrand });
-      if (p && !p._cat) writes.push({ table: "products", row: { id: p.id, brand: v.brand, size: v.size, unit: fresh.unit || p.unit, qty: Number(fresh.qty) || 1 } });
+      if (p && !p._cat && p.name !== undefined) writes.push({ table: "products", row: { id: p.id, brand: v.brand, size: v.size } });
       else if (p && p._cat) writes.push({ table: "products", row: Object.assign(D.productRow(p), { brand: v.brand, size: v.size }) });
       S.hub.putMany(writes);
       S.cache = null;
       S.expanded = null;
+      S.draft = null;
       render();
     }
 
-    return h("div", { class: "pad" },
-      hints.length ? h("p", { class: "note" }, hints.join(". ")) : null,
-      h("div", { class: "pad-row" }, stepper(item)),
+    var el = h("div", { class: "pad", "data-for": item.id },
+      seen,
+      h("div", { class: "pad-row" }, stepper(item, function () { S.expanded = null; render(); }, function (q) {
+        var fresh = find("items", item.id) || item;
+        if (Number(fresh.each) > 0) S.hub.put("items", { id: item.id, price: D.r2(Number(fresh.each) * q) });
+        keep();
+        paintMath();
+      })),
       bs.el,
-      h("div", { class: "pad-row" }, priceInput, offerBtn),
-      storeSel ? group(t("store"), storeSel) : null,
+      h("div", { class: "pad-row price-row" }, priceInput, modeChips.el, offerBtn),
+      math,
+      check,
       msg,
       h("div", { class: "btn-row" },
-        h("button", { type: "button", class: "btn btn-primary pad-save", onclick: function () { save(true); } }, opts.save ? t("save") : t("gotIt")),
-        trip && !opts.save ? h("button", { type: "button", class: "btn pad-noprice", onclick: function () { save(false); } }, t("gotItNoPrice")) : null,
-        trip && !opts.save ? h("button", { type: "button", class: "btn btn-quiet pad-missing", onclick: function () {
-          S.hub.put("items", { id: item.id, missing: trip.store });
+        h("button", { type: "button", class: "btn btn-primary pad-save", onclick: save }, inBasket ? t("save") : t("intoBasket")),
+        store && !inBasket ? h("button", { type: "button", class: "btn pad-missing", onclick: function () {
+          S.hub.put("items", { id: item.id, missing: store });
           S.expanded = null;
+          S.draft = null;
           render();
-        } }, t("notHere")) : null));
+        } }, t("notHere")) : null,
+        h("a", { class: "btn btn-quiet pad-edit", href: "#/item/" + item.id }, t("editItem"))));
+    paintMath();
+    return el;
   }
 
   /* ---------------------------------------------------------------- */
-  /*  shopping                                                         */
+  /*  checkout                                                         */
   /* ---------------------------------------------------------------- */
-
-  function tripItems(trip) {
-    return S.hub.all("items").filter(function (i) { return i.trip === trip.id; });
-  }
-
-  function viewShop(main) {
-    removeBar();
-    var current = currentList();
-    var trip = myTrip();
-    main.appendChild(back("/"));
-    if (!trip) {
-      main.appendChild(h("h1", { class: "page-title" }, t("whichStore")));
-      var grid = h("div", { class: "store-grid" });
-      stores().forEach(function (s) {
-        grid.appendChild(h("button", { type: "button", class: "store-btn", "data-store": s.id, onclick: function () {
-          var tr = S.hub.put("trips", { kind: "shop", store: s.id, list: current ? current.id : "", env: listEnv(current), date: today(), by: me(), started: new Date().toISOString(), status: "open", finished: "", total: 0, items_total: 0, count: 0, note: "", auto: "", budget: "", budget_ref: "", posted: "" });
-          setMyTrip(tr.id);
-          render();
-        } }, nm(s)));
-      });
-      main.appendChild(grid);
-      return;
-    }
-    if (trip.list && (!current || trip.list !== current.id)) {
-      chooseList(trip.list);
-      current = currentList();
-    }
-    var listId = trip.list || (current && current.id);
-    var inTrip = tripItems(trip);
-    var open = openItems(listId);
-    var here = open.filter(function (i) { return i.missing !== trip.store; });
-    var missing = open.filter(function (i) { return i.missing === trip.store; });
-    var total = D.r2(inTrip.reduce(function (s, i) { return s + (Number(i.price) || 0); }, 0));
-    var env = find("envelopes", trip.env || listEnv(current));
-    var envLine = null;
-    if (env) {
-      var left = D.r2(envView(env).left - total);
-      envLine = h("p", { class: "trip-env", "data-tone": left < 0 ? "bad" : null }, left < 0 ? t("overBy", { env: nm(env), n: money(-left) }) : t("leftIn", { env: nm(env), left: money(left) }));
-    }
-    main.appendChild(h("div", { class: "trip-head" },
-      h("h1", { class: "page-title" }, t("shoppingAt", { store: storeName(trip.store) })),
-      h("p", { class: "trip-total" }, t("soFar", { total: money(total), n: inTrip.length, m: inTrip.length + open.length })),
-      envLine,
-      h("div", { class: "btn-row" },
-        h("a", { class: "btn btn-primary", href: "#/finish", style: "text-decoration:none" }, t("finish")),
-        h("button", { type: "button", class: "btn", id: "shop-scan", onclick: function () { scan("shop"); } }, t("scan")))));
-    main.appendChild(h("p", { class: "note" }, t("tapItem")));
-
-    function shopRows(items, list, opts) {
-      items.forEach(function (i) {
-        var v = variantText(i.brand, i.size);
-        list.appendChild(h("button", { type: "button", class: "shop-row" + (opts && opts.done ? " done" : ""), "data-id": i.id, "aria-expanded": S.expanded === i.id ? "true" : "false", onclick: function () {
-          S.expanded = S.expanded === i.id ? null : i.id;
-          render();
-          var pi = document.querySelector(".pad .price-input");
-          if (pi) pi.focus();
-        } },
-          h("span", { class: "item-name" }, itemName(i), v ? h("span", { class: "item-sub" }, v) : null),
-          opts && opts.done ? h("span", { class: "amt" }, Number(i.price) > 0 ? money(i.price) : "-") : h("span", { class: "qty" }, qtyText(i.qty, i.unit))));
-        if (S.expanded === i.id) list.appendChild(h("div", { class: "expand" }, pricePad(i, { trip: trip, save: !!(opts && opts.done) })));
-      });
-    }
-
-    byCategory(here).forEach(function (g) {
-      var list = h("div", { class: "list" });
-      shopRows(g.items, list);
-      main.appendChild(section(g.name, list, { class: "section cat" }));
-    });
-    if (inTrip.length) {
-      var bl = h("div", { class: "list", id: "basket" });
-      shopRows(inTrip, bl, { done: true });
-      main.appendChild(section(t("inThisTrip"), bl));
-    }
-    if (missing.length) {
-      var ml = h("div", { class: "list", id: "missing" });
-      shopRows(missing, ml);
-      main.appendChild(section(t("notFoundHere"), ml));
-    }
-    main.appendChild(h("div", { class: "btn-row", style: "margin-top:16px" }, Kit.confirmButton(t("cancelTrip"), t("tapAgainCancel"), function () {
-      S.hub.put("trips", { id: trip.id, status: "cancelled", del: new Date().toISOString() });
-      setMyTrip(null);
-      location.hash = "#/";
-    }, "btn btn-quiet")));
-  }
 
   function envChips(value) {
     var envs = envelopes();
@@ -1401,21 +1576,65 @@
     }), value, null, { id: "env-chips" });
   }
 
-  function viewFinish(main) {
+  /**
+   * The receipt total, the store and the envelope. What the items add up to
+   * is shown to check the receipt against; a lower receipt is a discount at
+   * checkout, kept on the trip (and on the item it was on, if you say),
+   * while the shelf prices stay as they were for the history.
+   */
+  function viewCheckout(main) {
     removeBar();
     var trip = myTrip();
-    main.appendChild(back("/shop"));
+    main.appendChild(back("/"));
     if (!trip) {
       main.appendChild(h("p", { class: "empty" }, t("notFound")));
       return;
     }
-    var inTrip = tripItems(trip);
-    var sum = D.r2(inTrip.reduce(function (s, i) { return s + (Number(i.price) || 0); }, 0));
-    main.appendChild(h("h1", { class: "page-title" }, t("finish")));
-    main.appendChild(h("p", { class: "note" }, t("finishLead")));
-    main.appendChild(h("p", null, t("itemsTotal", { total: money(sum) })));
-    var total = h("input", { class: "field-input price-input", id: "trip-total", type: "text", inputmode: "decimal", dir: "ltr", value: sum ? money(sum) : "" });
+    var items = basketItems(trip);
+    var lines = items.map(function (i) { return { id: i.id, price: lineTotal(i) }; });
+    var base = D.checkout(lines, 0);
+    main.appendChild(h("h1", { class: "page-title" }, t("checkout")));
+
+    var store = chips(t("store"), stores().map(function (s) { return { value: s.id, label: nm(s) }; }), trip.store || "", function (v) {
+      S.hub.put("trips", { id: trip.id, store: v });
+    }, { id: "checkout-store" });
+    main.appendChild(group(t("store"), store.el));
+
+    var list = h("div", { class: "list", id: "checkout-items" });
+    items.forEach(function (i) {
+      var line = lineTotal(i);
+      list.appendChild(h("a", { class: "row row-link", href: "#/", "data-id": i.id, onclick: function () { S.expanded = i.id; S.keep = true; } },
+        h("div", { class: "row-main" }, h("span", { class: "row-title" }, itemName(i)),
+          h("span", { class: "row-sub" }, [variantText(i.brand, i.size), line > 0 && Number(i.qty) > 1 ? t("eachLine", { q: fmtNum(i.qty), each: money(eachOf(i)), total: money(line) }) : qtyText(i.qty, i.unit)].filter(String).join(sep()))),
+        h("span", { class: "amt" + (line > 0 ? "" : " muted") }, line > 0 ? money(line) : t("noPrice"))));
+    });
+    main.appendChild(list);
+    main.appendChild(h("p", { class: "items-sum", id: "items-sum" }, t("itemsTotal", { total: money(base.sum) }) + (base.unpriced ? sep() + t("unpricedN", { n: base.unpriced }) : "")));
+
+    var total = h("input", { class: "field-input price-input", id: "trip-total", type: "text", inputmode: "decimal", dir: "ltr", autocomplete: "off", placeholder: "0.00", value: base.sum ? money(base.sum) : "" });
     main.appendChild(field(t("receiptTotal"), total));
+    main.appendChild(h("p", { class: "note" }, t("checkoutLead")));
+    var diffLine = h("p", { class: "diff-line", id: "diff-line", "aria-live": "polite" });
+    main.appendChild(diffLine);
+    var pricedItems = items.filter(function (i) { return lineTotal(i) > 0; });
+    var discPick = pricedItems.length > 1
+      ? chips(t("discountOn"), [{ value: "", label: t("notSure") }].concat(pricedItems.map(function (i) { return { value: i.id, label: itemName(i) }; })), "", null, { id: "disc-item" })
+      : null;
+    var discWrap = discPick ? group(t("discountOn"), discPick.el) : null;
+    if (discWrap) {
+      discWrap.hidden = true;
+      main.appendChild(discWrap);
+    }
+    function paintDiff() {
+      var c = D.checkout(lines, readMoney(total.value) || 0);
+      diffLine.textContent = c.discount ? t("discountLine", { n: money(c.discount) }) : c.diff > 0 ? t("extraLine", { n: money(c.diff) }) : "";
+      diffLine.setAttribute("data-tone", c.discount ? "good" : "");
+      if (discWrap) discWrap.hidden = !c.discount;
+      return c;
+    }
+    total.addEventListener("input", paintDiff);
+    paintDiff();
+
     var env = envChips(trip.env || listEnv(find("lists", trip.list)));
     if (env) main.appendChild(group(t("paidFrom"), env.el));
     var msg = h("p", { class: "form-error", role: "alert" });
@@ -1424,12 +1643,24 @@
       var n = readMoney(total.value);
       if (n === null || isNaN(n) || n <= 0) { msg.textContent = t("typeAmount"); return; }
       if (env && !env.get()) { msg.textContent = t("chooseEnv"); return; }
+      var c = paintDiff();
+      var on = c.discount ? (discPick ? discPick.get() : pricedItems.length === 1 ? pricedItems[0].id : "") : "";
       var auto = Kit.canUse("budget");
-      S.hub.put("trips", { id: trip.id, status: "done", finished: new Date().toISOString(), total: n, items_total: sum, count: inTrip.length, env: env ? env.get() : "", auto: auto ? "yes" : "", budget: "" });
+      var now = new Date().toISOString();
+      var st = store.get();
+      var w = [{ table: "trips", row: { id: trip.id, status: "done", finished: now, store: st, total: n, items_total: c.sum, discount: c.discount, discount_item: on, count: items.length, env: env ? env.get() : "", auto: auto ? "yes" : "", budget: "" } }];
+      items.forEach(function (i) {
+        var done = { id: i.id, done: now, done_by: me(), store: st, price: lineTotal(i), missing: "" };
+        w.push({ table: "items", row: done });
+        w.push({ table: "purchases", row: purchaseRow(Object.assign({}, i, done), { discount: i.id === on ? c.discount : 0 }) });
+      });
+      S.hub.putMany(w);
       setMyTrip(null);
+      S.expanded = null;
       Kit.toast(auto ? t("tripSaved") : t("tripSavedReview"));
       location.hash = "#/";
     } }, t("finishTrip")));
+    main.appendChild(h("div", { class: "btn-row", style: "margin-top:14px" }, stopButton(trip)));
   }
 
   /** "I paid": a quick purchase without a list. */
@@ -1548,9 +1779,10 @@
       var item = onListItem(listId, p.id) || addProduct(find("lists", listId) || current, p, bc);
       S.hub.put("items", { id: item.id, brand: bc.brand || item.brand || "", size: bc.size || item.size || "" });
       S.expanded = item.id;
+      S.draft = null;
       S.keep = true;
-      location.hash = "#/shop";
-      render();
+      if (location.hash !== "#/" && location.hash !== "") location.hash = "#/";
+      else render();
       return;
     }
     var it = onListItem(current.id, p.id);
@@ -1563,7 +1795,7 @@
   function viewBarcode(main) {
     removeBar();
     var link = S.link;
-    main.appendChild(back(link && link.where === "shop" ? "/shop" : "/add"));
+    main.appendChild(back(link && link.where === "shop" ? "/" : "/add"));
     if (!link) {
       main.appendChild(h("p", { class: "empty" }, t("notFound")));
       return;
@@ -1600,7 +1832,7 @@
       Kit.clear(detail);
       var v = q.value.trim();
       if (!v) return;
-      var found = D.search(products(), v, D.addCounts(raw("items")), cache().brands).slice(0, 12);
+      var found = D.search(products(), v, D.buyCounts(purchases()), cache().brands).slice(0, 12);
       found.forEach(function (p) {
         results.appendChild(h("button", { type: "button", class: "shop-row", "data-product": p.id, onclick: function () { choose(p); } }, h("span", { class: "item-name" }, nm(p))));
       });
@@ -1660,7 +1892,7 @@
       body.appendChild(h("tr", { "data-offer": r.offer ? "yes" : null },
         h("td", null, dayText(r.date)),
         h("td", null, storeName(r.store) || "-", h("span", { class: "td-sub" }, [variantText(r.brand, r.size), qtyText(r.qty, r.unit)].filter(String).join(sep()))),
-        h("td", { class: "num" }, money(r.price) + (r.offer ? " (" + t("offerTag") + ")" : "")),
+        h("td", { class: "num" }, money(r.price) + (r.offer ? " (" + t("offerTag") + ")" : ""), r.discount > 0 ? h("span", { class: "td-sub" }, t("checkoutTag", { n: money(r.discount) })) : null),
         h("td", { class: "num muted" }, money(r.per) + "/" + perName(r.base))));
     });
     table.appendChild(body);
@@ -1715,19 +1947,43 @@
       Kit.toast(t("saved"));
       location.hash = "#/";
     } }, t("save")));
-    if (i.done) main.appendChild(section(t("price"), pricePad(i, { save: true })));
     main.appendChild(historyBlock(p.id));
-    main.appendChild(h("div", { class: "btn-row", style: "margin-top:14px" }, Kit.confirmButton(t("deleteItem"), t("tapAgainDelete"), function () {
-      S.hub.remove("items", i.id);
-      Kit.toast(t("deleted"));
-      location.hash = "#/";
-    })));
+    main.appendChild(h("div", { class: "btn-row", style: "margin-top:14px" },
+      Kit.confirmButton(t("deleteItem"), t("tapAgainDelete"), function () {
+        S.hub.remove("items", i.id);
+        Kit.toast(t("deleted"));
+        location.hash = "#/";
+      }),
+      deleteEverywhere(p, "/")));
   }
 
-  function viewProduct(main, id) {
+  /**
+   * An item gone for good: off every list, its prices out of the history,
+   * and out of search. A catalogue item is hidden (the catalogue is in the code).
+   */
+  function deleteEverywhere(p, after) {
+    return Kit.confirmButton(t("deleteEverywhere"), t("tapAgainForGood"), function () {
+      var now = new Date().toISOString();
+      var w = [];
+      var inCatalog = CATALOG.some(function (c) { return c.id === p.id; });
+      if (inCatalog) w.push({ table: "products", row: Object.assign(D.productRow(p), { hidden: "yes" }) });
+      else if (find("products", p.id)) w.push({ table: "products", row: { id: p.id, del: now } });
+      S.hub.all("items").forEach(function (i) { if (i.product === p.id && !i.done) w.push({ table: "items", row: { id: i.id, del: now } }); });
+      S.hub.all("purchases").forEach(function (r) { if (r.product === p.id) w.push({ table: "purchases", row: { id: r.id, del: now } }); });
+      S.hub.all("barcodes").forEach(function (b) { if (b.product === p.id) w.push({ table: "barcodes", row: { id: b.id, del: now } }); });
+      if (w.length) S.hub.putMany(w);
+      S.cache = null;
+      S.session = S.session.filter(function (id) { var it = find("items", id); return it && it.product !== p.id; });
+      Kit.toast(t("deleted"));
+      location.hash = "#" + after;
+    }, "btn btn-quiet danger");
+  }
+
+  function viewProduct(main, id, query) {
     removeBar();
     var p = product(id);
-    main.appendChild(back("/prices"));
+    var from = query && query.from === "add" ? "/add" : "/prices";
+    main.appendChild(back(from));
     if (!p) {
       main.appendChild(h("p", { class: "empty" }, t("notFound")));
       return;
@@ -1742,11 +1998,19 @@
     }
     main.appendChild(historyBlock(p.id));
     var pf = productFields(p);
-    main.appendChild(section("", [pf.el, h("button", { type: "button", class: "btn", onclick: function () {
-      S.hub.put("products", Object.assign(p._cat ? D.productRow(p) : {}, pf.read()));
+    var pmsg = h("p", { class: "form-error", role: "alert" });
+    main.appendChild(section(t("editItem"), [pf.el, pmsg, h("div", { class: "btn-row" }, h("button", { type: "button", class: "btn btn-primary", id: "product-save", onclick: function () {
+      var pr = pf.read();
+      if (!pr.name && !pr.name_ar) { pmsg.textContent = t("giveName"); return; }
+      var w = [{ table: "products", row: Object.assign(p._cat ? D.productRow(p) : {}, pr) }];
+      /* the name on lists follows */
+      S.hub.all("items").forEach(function (i) { if (i.product === p.id && !i.done) w.push({ table: "items", row: { id: i.id, name: pr.name || pr.name_ar } }); });
+      S.hub.putMany(w);
       S.cache = null;
       Kit.toast(t("saved"));
-    } }, t("save"))]));
+      location.hash = "#" + from;
+    } }, t("save")))]));
+    main.appendChild(h("div", { class: "btn-row", style: "margin-top:14px" }, deleteEverywhere(p, from)));
   }
 
   /* ---------------------------------------------------------------- */
@@ -1901,6 +2165,12 @@
       } }, t("addStore")))]));
 
     main.appendChild(section(t("language"), Kit.langSwitch(["en", "ar"])));
+    if (Kit.lang() === "ar") {
+      main.appendChild(section(t("addressAs"), chips(t("addressAs"), [{ value: "m", label: t("masc") }, { value: "f", label: t("fem") }], Kit.addressAs(), function (v) {
+        Kit.setAddressAs(v);
+        render();
+      }, { id: "address-as" }).el));
+    }
     main.appendChild(section(t("device"), [
       me() ? h("p", { class: "note" }, t("thisIs", { name: me() })) : null,
       h("div", { class: "btn-row" }, Kit.confirmButton(t("lockDevice"), t("tapToLock"), function () { Kit.lockDevice(S.hub); }))]));
@@ -1911,7 +2181,7 @@
   /* ---------------------------------------------------------------- */
 
   /* screens with typing in them are not redrawn by a sync; the add screen refreshes its results only */
-  var FORMS = { item: 1, product: 1, finish: 1, settings: 1, prices: 1, paid: 1, barcode: 1 };
+  var FORMS = { item: 1, product: 1, checkout: 1, settings: 1, prices: 1, paid: 1, barcode: 1 };
   var route = { name: "" };
 
   function parseRoute() {
@@ -1931,9 +2201,18 @@
 
   function render() {
     var next = parseRoute();
-    if (next.name !== route.name && !S.keep) S.expanded = null;
+    if (next.name === "shop") {
+      /* the shopping screen is the list now */
+      history.replaceState(null, "", "#/");
+      next = parseRoute();
+    }
+    if (next.name !== route.name && !S.keep) {
+      S.expanded = null;
+      S.draft = null;
+    }
     S.keep = false;
     route = next;
+    S.shown = location.hash;
     S.repaintAdd = null;
     S.cache = null;
     var main = S.main;
@@ -1941,9 +2220,9 @@
     switch (route.name) {
       case "add": viewAdd(main); break;
       case "item": viewItem(main, route.arg); break;
-      case "product": viewProduct(main, route.arg); break;
-      case "shop": viewShop(main); break;
-      case "finish": viewFinish(main); break;
+      case "product": viewProduct(main, route.arg, route.query); break;
+      case "checkout":
+      case "finish": viewCheckout(main); break;
       case "paid": viewPaid(main, route.query); break;
       case "env": viewEnv(main, route.arg); break;
       case "prices": viewPrices(main); break;
@@ -1986,8 +2265,12 @@
         lastState = hub.state;
         onData();
       });
-      window.addEventListener("hashchange", render);
-      window.addEventListener("popstate", render);
+      /* a tap on a link fires both; the second would redraw a form already being typed in */
+      function onNav() {
+        if (location.hash !== S.shown) render();
+      }
+      window.addEventListener("hashchange", onNav);
+      window.addEventListener("popstate", onNav);
       render();
     },
     onWho: function () {

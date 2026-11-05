@@ -80,6 +80,13 @@
       yesterdayAt: "أمس {t}",
       language: "اللغة",
     },
+    ar_f: {
+      unlockLead: "الصقي عنوان المركز والمفتاح. هذا يتم مرة واحدة لكل تطبيق على كل جهاز.",
+      noKey: "الصقي المفتاح.",
+      cannotReach: "تعذر الوصول للمركز. تأكدي من الاتصال والعنوان ثم حاولي مرة ثانية.",
+      statusLabel: "{status}. آخر مزامنة {when}. اضغطي للمزامنة الآن.",
+      tapToLock: "اضغطي مرة ثانية للقفل",
+    },
   };
 
   var lang = "en";
@@ -94,9 +101,31 @@
     });
   }
 
+  /*
+   * Arabic speaks to whoever holds the phone. Apps add feminine wording as
+   * "ar_f"; it is used when this phone is set to it, or, until it is set,
+   * when the phone's key does not open Budget.
+   */
+  var ADDRESS_KEY = "lifeapps.addressAs";
+  function addressAs() {
+    try {
+      var v = global.localStorage.getItem(ADDRESS_KEY);
+      if (v === "m" || v === "f") return v;
+    } catch (e) {}
+    var w = who();
+    if (!w.apps) return "m";
+    return w.apps.indexOf("*") >= 0 || w.apps.indexOf("budget") >= 0 ? "m" : "f";
+  }
+  function setAddressAs(v) {
+    try {
+      global.localStorage.setItem(ADDRESS_KEY, v);
+    } catch (e) {}
+  }
+
   /** t("waiting", { n: 3 }) -> "3 waiting" in the device's language */
   function t(key, vars) {
-    var s = (STR[lang] && STR[lang][key]) || STR.en[key] || key;
+    var fem = lang !== "en" && STR[lang + "_f"] && STR[lang + "_f"][key] && addressAs() === "f" ? STR[lang + "_f"][key] : null;
+    var s = fem || (STR[lang] && STR[lang][key]) || STR.en[key] || key;
     Object.keys(vars || {}).forEach(function (k) {
       s = s.split("{" + k + "}").join(String(vars[k]));
     });
@@ -375,6 +404,7 @@
     global.Hub.clearConfig();
     try {
       global.localStorage.removeItem(WHO_KEY);
+      global.localStorage.removeItem(ADDRESS_KEY);
     } catch (e) {}
     global.location.reload();
   }
@@ -455,6 +485,8 @@
     langSwitch: langSwitch,
     who: who,
     canUse: canUse,
+    addressAs: addressAs,
+    setAddressAs: setAddressAs,
     statusPill: statusPill,
     confirmButton: confirmButton,
     lockDevice: lockDevice,
